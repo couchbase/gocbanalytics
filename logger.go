@@ -95,17 +95,17 @@ func NewNoopLogger() *NoopLogger {
 	return &NoopLogger{}
 }
 
-func (n NoopLogger) Error(format string, v ...interface{}) {
+func (n NoopLogger) Error(_ string, _ ...interface{}) {
 }
 
-func (n NoopLogger) Warn(format string, v ...interface{}) {
+func (n NoopLogger) Warn(_ string, _ ...interface{}) {
 }
 
-func (n NoopLogger) Info(format string, v ...interface{}) {
+func (n NoopLogger) Info(_ string, _ ...interface{}) {
 }
 
-func (n NoopLogger) Debug(format string, v ...interface{}) {
+func (n NoopLogger) Debug(_ string, _ ...interface{}) {
 }
 
-func (n NoopLogger) Trace(format string, v ...interface{}) {
+func (n NoopLogger) Trace(_ string, _ ...interface{}) {
 }

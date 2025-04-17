@@ -192,6 +192,7 @@ func mergeClusterOptions(opts ...*ClusterOptions) *ClusterOptions {
 		TimeoutOptions:  nil,
 		SecurityOptions: nil,
 		Unmarshaler:     nil,
+		Logger:          nil,
 	}
 
 	for _, opt := range opts {

@@ -222,7 +222,6 @@ func translateClientError(err error) error {
 		return err
 	}
 
-	// TODO: Check for client auth failure, may not actually exist
 	if clientErr.HTTPResponseCode == 401 {
 		return newColumnarError(clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode).
 			withMessage(clientErr.InnerError.Error()).
@@ -289,22 +288,10 @@ func translateClientError(err error) error {
 	switch {
 	case errors.Is(clientErr.InnerError, httpqueryclient.ErrTimeout):
 		baseErr.cause = ErrTimeout
-		if clientErr.WasNotDispatched {
-			baseErr.message = "operation not sent to server, as timeout would be exceeded"
-		}
 	case errors.Is(clientErr.InnerError, context.Canceled):
 		baseErr.cause = context.Canceled
-		if clientErr.WasNotDispatched {
-			baseErr.message = "operation not sent to server, as context was cancelled"
-		}
 	case errors.Is(clientErr.InnerError, context.DeadlineExceeded):
 		baseErr.cause = context.DeadlineExceeded
-		if clientErr.WasNotDispatched {
-			baseErr.message = "operation not sent to server, as context deadline would be exceeded"
-		}
-		// TODO
-	// case errors.Is(clientErr.InnerError, gocbcore.ErrAuthenticationFailure):
-	// 	baseErr.cause = ErrInvalidCredential
 	default:
 		baseErr.cause = errors.New(err.Error()) // nolint: err113
 	}

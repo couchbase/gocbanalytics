@@ -1,8 +1,9 @@
 package cbanalytics
 
 import (
-	"github.com/couchbase/gocbanalytics/internal/httpqueryclient"
 	"time"
+
+	"github.com/couchbase/gocbanalytics/internal/httpqueryclient"
 )
 
 type scopeClient interface {

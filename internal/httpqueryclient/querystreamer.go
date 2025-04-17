@@ -164,7 +164,7 @@ func (r *queryStreamer) One() ([]byte, error) {
 	}
 
 	// Read any remaining rows
-	for r.NextRow() != nil {
+	for r.NextRow() != nil { //nolint:revive
 		// skip
 	}
 

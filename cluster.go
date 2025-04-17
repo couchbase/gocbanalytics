@@ -21,7 +21,7 @@ func NewCluster(httpEndpoint string, credential Credential, opts ...*ClusterOpti
 	// There's no point in overcomplicating this for the sake of perfection.
 	connSpec, err := url.Parse(httpEndpoint)
 	if err != nil {
-		return nil, err
+		return nil, err //nolint:wrapcheck
 	}
 
 	if connSpec.Scheme != "https" && connSpec.Scheme != "http" {
@@ -32,6 +32,7 @@ func NewCluster(httpEndpoint string, credential Credential, opts ...*ClusterOpti
 	}
 
 	var port int
+
 	if connSpec.Port() == "" {
 		if connSpec.Scheme == "https" {
 			port = 443
@@ -41,7 +42,7 @@ func NewCluster(httpEndpoint string, credential Credential, opts ...*ClusterOpti
 	} else {
 		thisPort, err := strconv.Atoi(connSpec.Port())
 		if err != nil {
-			return nil, err //nolint:err113
+			return nil, err //nolint:wrapcheck
 		}
 
 		port = thisPort
@@ -93,7 +94,7 @@ func NewCluster(httpEndpoint string, credential Credential, opts ...*ClusterOpti
 
 	query, err := url.ParseQuery(connSpec.RawQuery)
 	if err != nil {
-		return nil, err //nolint:err113
+		return nil, err //nolint:wrapcheck
 	}
 
 	fetchOption := func(name string) (string, bool) {
@@ -234,5 +235,5 @@ func NewCluster(httpEndpoint string, credential Credential, opts ...*ClusterOpti
 
 // Close shuts down the cluster and releases all resources.
 func (c *Cluster) Close() error {
-	return c.client.Close()
+	return c.client.Close() //nolint:wrapcheck
 }

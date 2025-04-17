@@ -86,13 +86,13 @@ func (l *leakTrackingReadCloser) Read(p []byte) (int, error) {
 		removeTrackedHTTPBodyRecord(l)
 	}
 
-	return n, err
+	return n, err //nolint:wrapcheck
 }
 
 func (l *leakTrackingReadCloser) Close() error {
 	removeTrackedHTTPBodyRecord(l)
 
-	return l.parent.Close()
+	return l.parent.Close() //nolint:wrapcheck
 }
 
 var _ io.ReadCloser = (*leakTrackingReadCloser)(nil)

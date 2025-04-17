@@ -181,6 +181,7 @@ func (logger *testLogger) Error(format string, v ...interface{}) {
 func (logger *testLogger) Warn(format string, v ...interface{}) {
 	if atomic.LoadUint32(&logger.suppressWarnings) == 1 || strings.Contains(format, "server certificate verification is disabled") {
 		logger.Parent.Info(format, v...)
+
 		return
 	}
 

@@ -54,7 +54,7 @@ func (r *QueryResult) Err() error {
 
 	err := r.reader.Err()
 	if err != nil {
-		return err
+		return err // nolint:wrapcheck
 	}
 
 	return nil
@@ -66,7 +66,7 @@ func (r *QueryResult) Err() error {
 func (r *QueryResult) MetaData() (*QueryMetadata, error) {
 	meta, err := r.reader.MetaData()
 	if err != nil {
-		return nil, err
+		return nil, err // nolint:wrapcheck
 	}
 
 	return meta, nil

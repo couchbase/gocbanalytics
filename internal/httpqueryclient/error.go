@@ -58,7 +58,6 @@ type QueryError struct {
 	Endpoint         string
 	ErrorText        string
 	HTTPResponseCode int
-	WasNotDispatched bool
 }
 
 func newColumnarError(innerError error, statement string, endpoint string, responseCode int) *QueryError {
@@ -71,7 +70,6 @@ func newColumnarError(innerError error, statement string, endpoint string, respo
 		Endpoint:         endpoint,
 		ErrorText:        "",
 		HTTPResponseCode: responseCode,
-		WasNotDispatched: false,
 	}
 }
 
@@ -90,12 +88,6 @@ func (e QueryError) withLastDetail(code uint32, msg string) *QueryError {
 
 func (e QueryError) withErrors(errors []ErrorDesc) *QueryError {
 	e.Errors = errors
-
-	return &e
-}
-
-func (e QueryError) withWasNotDispatched() *QueryError {
-	e.WasNotDispatched = true
 
 	return &e
 }

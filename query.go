@@ -14,7 +14,7 @@ func (c *Cluster) ExecuteQuery(ctx context.Context, statement string, opts ...*Q
 
 	queryOpts := mergeQueryOptions(opts...)
 
-	return c.client.QueryClient().Query(ctx, statement, queryOpts)
+	return c.client.QueryClient().Query(ctx, statement, queryOpts) //nolint:wrapcheck
 }
 
 // ExecuteQuery executes the query statement on the server, tying the query context to this Scope.
@@ -27,7 +27,7 @@ func (s *Scope) ExecuteQuery(ctx context.Context, statement string, opts ...*Que
 
 	queryOpts := mergeQueryOptions(opts...)
 
-	return s.client.QueryClient().Query(ctx, statement, queryOpts)
+	return s.client.QueryClient().Query(ctx, statement, queryOpts) //nolint:wrapcheck
 }
 
 func mergeQueryOptions(opts ...*QueryOptions) *QueryOptions {
