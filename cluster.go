@@ -30,6 +30,19 @@ func NewCluster(connStr string, credential Credential, opts ...*ClusterOptions) 
 		}
 	}
 
+	addr := address{
+		Host: connSpec.Addresses[0].Host,
+		Port: connSpec.Addresses[0].Port,
+	}
+
+	if addr.Port == -1 {
+		if connSpec.Scheme == "https" {
+			addr.Port = 443
+		} else if connSpec.Scheme == "http" {
+			addr.Port = 80
+		}
+	}
+
 	clusterOpts := mergeClusterOptions(opts...)
 
 	if clusterOpts == nil {
@@ -197,12 +210,9 @@ func NewCluster(connStr string, credential Credential, opts ...*ClusterOptions) 
 		TrustOnly:                            securityOpts.TrustOnly,
 		DisableServerCertificateVerification: securityOpts.DisableServerCertificateVerification,
 		CipherSuites:                         cipherSuites,
-		Address: address{
-			Host: connSpec.Addresses[0].Host,
-			Port: connSpec.Addresses[0].Port,
-		},
-		Unmarshaler: unmarshaler,
-		Logger:      logger,
+		Address:                              addr,
+		Unmarshaler:                          unmarshaler,
+		Logger:                               logger,
 	})
 	if err != nil {
 		return nil, err
