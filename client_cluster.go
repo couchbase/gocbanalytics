@@ -23,6 +23,7 @@ type address struct {
 }
 
 type clusterClientOptions struct {
+	Scheme                               string
 	Credential                           Credential
 	ConnectTimeout                       time.Duration
 	ServerQueryTimeout                   time.Duration
@@ -96,9 +97,10 @@ func newHTTPClusterClient(opts clusterClientOptions) (*httpClusterClient, error)
 
 	clientOpts := httpqueryclient.ClientConfig{
 		TLSConfig: createTlsConfig(opts.CipherSuites, pool, opts.Logger),
+		Logger:    opts.Logger,
 	}
 
-	client := httpqueryclient.NewClient(addr, clientOpts)
+	client := httpqueryclient.NewClient(opts.Scheme, addr, clientOpts)
 
 	return &httpClusterClient{
 		credential:         opts.Credential,
@@ -111,6 +113,7 @@ func newHTTPClusterClient(opts clusterClientOptions) (*httpClusterClient, error)
 
 func (c *httpClusterClient) Database(name string) databaseClient {
 	return newHTTPDatabaseClient(httpDatabaseClientConfig{
+		Credential:           c.credential,
 		Client:               c.client,
 		Name:                 name,
 		DefaultServerTimeout: c.serverQueryTimeout,
@@ -121,6 +124,7 @@ func (c *httpClusterClient) Database(name string) databaseClient {
 
 func (c *httpClusterClient) QueryClient() queryClient {
 	return newHTTPQueryClient(httpQueryClientConfig{
+		Credential:                c.credential,
 		Client:                    c.client,
 		DefaultServerQueryTimeout: c.serverQueryTimeout,
 		DefaultUnmarshaler:        c.unmarshaler,

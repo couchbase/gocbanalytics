@@ -20,14 +20,16 @@ type ClientConfig struct {
 
 // Client represents an HTTP client that can be used to make requests to the server.
 type Client struct {
+	scheme      string
 	endpoint    string
 	innerClient *http.Client
 	logger      logging.Logger
 }
 
 // NewClient creates a new Client with the given endpoint and configuration.
-func NewClient(endpoint string, config ClientConfig) *Client {
+func NewClient(scheme string, endpoint string, config ClientConfig) *Client {
 	return &Client{
+		scheme:      scheme,
 		endpoint:    endpoint,
 		innerClient: createHTTPClient(config.TLSConfig),
 		logger:      config.Logger,

@@ -11,6 +11,7 @@ type databaseClient interface {
 }
 
 type httpDatabaseClient struct {
+	credential                Credential
 	client                    *httpqueryclient.Client
 	name                      string
 	defaultServerQueryTimeout time.Duration
@@ -19,6 +20,7 @@ type httpDatabaseClient struct {
 }
 
 type httpDatabaseClientConfig struct {
+	Credential           Credential
 	Client               *httpqueryclient.Client
 	Name                 string
 	DefaultServerTimeout time.Duration
@@ -28,6 +30,7 @@ type httpDatabaseClientConfig struct {
 
 func newHTTPDatabaseClient(cfg httpDatabaseClientConfig) *httpDatabaseClient {
 	return &httpDatabaseClient{
+		credential:                cfg.Credential,
 		client:                    cfg.Client,
 		name:                      cfg.Name,
 		defaultServerQueryTimeout: cfg.DefaultServerTimeout,
@@ -42,6 +45,7 @@ func (c *httpDatabaseClient) Name() string {
 
 func (c *httpDatabaseClient) Scope(name string) scopeClient {
 	return newHTTPScopeClient(httpScopeClientConfig{
+		Credential:                c.credential,
 		Client:                    c.client,
 		DatabaseName:              c.name,
 		Name:                      name,

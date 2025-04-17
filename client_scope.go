@@ -11,6 +11,7 @@ type scopeClient interface {
 }
 
 type httpScopeClient struct {
+	credential                Credential
 	client                    *httpqueryclient.Client
 	name                      string
 	databaseName              string
@@ -20,6 +21,7 @@ type httpScopeClient struct {
 }
 
 type httpScopeClientConfig struct {
+	Credential                Credential
 	Client                    *httpqueryclient.Client
 	DatabaseName              string
 	Name                      string
@@ -30,6 +32,7 @@ type httpScopeClientConfig struct {
 
 func newHTTPScopeClient(cfg httpScopeClientConfig) *httpScopeClient {
 	return &httpScopeClient{
+		credential:                cfg.Credential,
 		client:                    cfg.Client,
 		name:                      cfg.Name,
 		databaseName:              cfg.DatabaseName,
@@ -45,6 +48,7 @@ func (c *httpScopeClient) Name() string {
 
 func (c *httpScopeClient) QueryClient() queryClient {
 	return newHTTPQueryClient(httpQueryClientConfig{
+		Credential:                c.credential,
 		Client:                    c.client,
 		DefaultServerQueryTimeout: c.defaultServerQueryTimeout,
 		DefaultUnmarshaler:        c.defaultUnmarshaler,

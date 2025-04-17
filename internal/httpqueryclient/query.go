@@ -58,7 +58,7 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 	backoff := columnarExponentialBackoffWithJitter(100*time.Millisecond, 1*time.Minute, 2)
 
 	for {
-		reqURI := fmt.Sprintf("%s/api/v1/request", c.endpoint)
+		reqURI := fmt.Sprintf("%s://%s/api/v1/request", c.scheme, c.endpoint)
 
 		req, err := http.NewRequestWithContext(ctx, "POST", reqURI, io.NopCloser(bytes.NewReader(body)))
 		if err != nil {
@@ -280,13 +280,13 @@ func handleMaybeRetryColumnar(ctxDeadline time.Time, serverTimeout time.Duration
 	var body []byte
 
 	if !ctxDeadline.IsZero() {
-		if time.Now().Add(b).Before(ctxDeadline.Add(-b)) {
+		if time.Now().Add(b).After(ctxDeadline.Add(-b)) {
 			return nil, ErrContextDeadlineWouldBeExceeded
 		}
 	}
 
 	if serverTimeout > 0 {
-		if time.Now().Add(b).Before(time.Now().Add(serverTimeout)) {
+		if time.Now().Add(b).After(time.Now().Add(serverTimeout)) {
 			return nil, ErrTimeout
 		}
 

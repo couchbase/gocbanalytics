@@ -210,6 +210,7 @@ func NewCluster(httpEndpoint string, credential Credential, opts ...*ClusterOpti
 	}
 
 	mgr, err := newClusterClient(clusterClientOptions{
+		Scheme:                               connSpec.Scheme,
 		Credential:                           credential,
 		ConnectTimeout:                       connectTimeout,
 		ServerQueryTimeout:                   queryTimeout,
