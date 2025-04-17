@@ -1,0 +1,27 @@
+linters:
+  enable:
+    - errorlint
+    - err113
+    - exhaustruct
+    - gocritic
+    - gofmt
+    - nilnil
+    - nlreturn
+    - revive
+    - wrapcheck
+    - wsl
+linters-settings:
+  wrapcheck:
+    ignorePackageGlobs:
+      - github.com/couchbaselabs/gocbconnstr
+      - crypto/x509
+    ignoreInterfaceRegexps:
+      - "analyticsRowReader"
+      - "queryClient"
+      - "clusterClient"
+issues:
+  exclude-use-default: false
+
+  include:
+    - EXC0013
+    - EXC0014

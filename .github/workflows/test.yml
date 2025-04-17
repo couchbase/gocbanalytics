@@ -1,0 +1,58 @@
+name: Run Tests
+
+on:
+  push:
+    tags:
+      - v*
+    branches:
+      - main
+  pull_request:
+  workflow_call:
+
+jobs:
+  test:
+    name: Integration Test
+
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Install cbdinocluster
+        run: |
+          mkdir -p "$HOME/bin"
+          wget -nv -O $HOME/bin/cbdinocluster https://github.com/couchbaselabs/cbdinocluster/releases/download/v0.0.54/cbdinocluster-linux-amd64
+          chmod +x $HOME/bin/cbdinocluster
+          echo "$HOME/bin" >> $GITHUB_PATH
+      - name: Install s3mock
+        run: |
+          docker pull adobe/s3mock
+      - name: Initialize cbdinocluster
+        env:
+          GITHUB_TOKEN: ${{ secrets.GHCR_TOKEN }}
+        run: |
+          cbdinocluster -v init --auto
+      - name: Start couchbase cluster
+        env:
+          CLUSTERCONFIG: |
+            columnar: true
+            nodes:
+              - count: 3
+                version: 1.0.5-2518
+        run: |
+          CBDC_ID=$(cbdinocluster -v alloc --def="${CLUSTERCONFIG}")
+          CBDC_CONNSTR=$(cbdinocluster -v connstr --tls $CBDC_ID)
+          echo "CBDC_ID=$CBDC_ID" >> "$GITHUB_ENV"
+          echo "CBDC_CONNSTR=$CBDC_CONNSTR" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      - name: Initialize deps
+        run: go get
+      - name: Run tests
+        timeout-minutes: 40
+        env:
+          CBDC_ID: # from above
+          CBDC_CONNSTR: # from above
+          CBCONNSTR: ${{ env.CBDC_CONNSTR }}
+        run: |
+          go test ./... -v -race
