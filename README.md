@@ -4,7 +4,7 @@ Go client for [Couchbase](https://couchbase.com) Columnar
 
 ## Useful Links
 ### Documentation
-You can explore our API reference through godoc at [https://pkg.go.dev/github.com/couchbase/ganalytics](https://pkg.go.dev/github.com/couchbase/ganalytics).
+You can explore our API reference through godoc at [https://pkg.go.dev/github.com/couchbase/cbanalytics](https://pkg.go.dev/github.com/couchbase/cbanalytics).
 
 You can also find documentation for the Go Columnar SDK on the [official Couchbase docs](https://docs.couchbase.com/go-columnar-sdk/current/hello-world/overview.html).
 
@@ -12,12 +12,12 @@ You can also find documentation for the Go Columnar SDK on the [official Couchba
 
 To install the latest stable version, run:
 ```bash
-go get github.com/couchbase/ganalytics@latest
+go get github.com/couchbase/gocbanalytics@latest
 ```
 
 To install the latest developer version, run:
 ```bash
-go get github.com/couchbase/ganalytics@main
+go get github.com/couchbase/gocbanalytics@main
 ```
 
 ## Getting Started
@@ -30,7 +30,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/couchbaselabs/ganalytics"
+	"github.com/couchbase/gocbanalytics"
 )
 
 func main() {
@@ -40,14 +40,14 @@ func main() {
 		password = "..."
 	)
 	
-	cluster, err := ganalytics.NewCluster(
+	cluster, err := cbanalytics.NewCluster(
 		connStr,
-		ganalytics.NewCredential(username, password),
+		cbanalytics.NewCredential(username, password),
 		// The third parameter is optional.
 		// This example sets the default server query timeout to 3 minutes,
 		// that is the timeout value sent to the query server.
-		ganalytics.NewClusterOptions().SetTimeoutOptions(
-			ganalytics.NewTimeoutOptions().SetQueryTimeout(3*time.Minute),
+		cbanalytics.NewClusterOptions().SetTimeoutOptions(
+			cbanalytics.NewTimeoutOptions().SetQueryTimeout(3*time.Minute),
 		),
 	)
 	handleErr(err)
@@ -57,7 +57,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	printRows := func(result *ganalytics.QueryResult) {
+	printRows := func(result *cbanalytics.QueryResult) {
 		for row := result.NextRow(); row != nil; row = result.NextRow() {
 			var content map[string]interface{}
 
@@ -79,7 +79,7 @@ func main() {
 	result, err = cluster.ExecuteQuery(
 		ctx,
 		"select ?=1",
-		ganalytics.NewQueryOptions().SetPositionalParameters([]interface{}{1}),
+		cbanalytics.NewQueryOptions().SetPositionalParameters([]interface{}{1}),
 	)
 	handleErr(err)
 
@@ -89,7 +89,7 @@ func main() {
 	result, err = cluster.ExecuteQuery(
 		ctx,
 		"select $foo=1",
-		ganalytics.NewQueryOptions().SetNamedParameters(map[string]interface{}{"foo": 1}),
+		cbanalytics.NewQueryOptions().SetNamedParameters(map[string]interface{}{"foo": 1}),
 	)
 	handleErr(err)
 
@@ -129,5 +129,5 @@ Copyright 2025 Couchbase Inc.
 Licensed under the Apache License, Version 2.0.
 
 See
-[LICENSE](https://github.com/couchbase/ganalytics/blob/main/LICENSE)
+[LICENSE](https://github.com/couchbase/cbanalytics/blob/main/LICENSE)
 for further details.

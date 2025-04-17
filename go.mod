@@ -1,4 +1,4 @@
-module github.com/couchbase/ganalytics
+module github.com/couchbase/gocbanalytics
 
 go 1.21.5
 

@@ -47,7 +47,7 @@ type DefaultLogger struct {
 func NewDefaultLogger(level LogLevel, offset int) *DefaultLogger {
 	return &DefaultLogger{
 		Level:    level,
-		GoLogger: log.New(os.Stderr, "ganalytics ", log.Lmicroseconds|log.Lshortfile),
+		GoLogger: log.New(os.Stderr, "gocbanalytics ", log.Lmicroseconds|log.Lshortfile),
 		Offset:   offset,
 	}
 }

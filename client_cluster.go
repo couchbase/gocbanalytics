@@ -1,4 +1,4 @@
-package ganalytics
+package cbanalytics
 
 import (
 	"crypto/tls"
@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/couchbase/ganalytics/internal/httpqueryclient"
+	"github.com/couchbase/gocbanalytics/internal/httpqueryclient"
 )
 
 type clusterClient interface {

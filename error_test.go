@@ -1,4 +1,4 @@
-package ganalytics
+package cbanalytics
 
 import (
 	"testing"

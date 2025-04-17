@@ -1,7 +1,7 @@
-package ganalytics
+package cbanalytics
 
 import (
-	"github.com/couchbase/ganalytics/internal/httpqueryclient"
+	"github.com/couchbase/gocbanalytics/internal/httpqueryclient"
 	"time"
 )
 

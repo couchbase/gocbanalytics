@@ -1,4 +1,4 @@
-package ganalytics
+package cbanalytics
 
 const (
 	versionStr = "v1.0.0"

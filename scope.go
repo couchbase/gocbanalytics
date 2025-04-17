@@ -1,4 +1,4 @@
-package ganalytics
+package cbanalytics
 
 // Scope represents a Columnar scope.
 type Scope struct {

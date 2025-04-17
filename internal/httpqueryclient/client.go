@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/couchbase/ganalytics/internal/logging"
+	"github.com/couchbase/gocbanalytics/internal/logging"
 )
 
 // ClientConfig holds the configuration for the client.

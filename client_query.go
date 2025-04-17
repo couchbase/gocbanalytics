@@ -1,4 +1,4 @@
-package ganalytics
+package cbanalytics
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/couchbase/ganalytics/internal/httpqueryclient"
+	"github.com/couchbase/gocbanalytics/internal/httpqueryclient"
 )
 
 type queryClient interface {

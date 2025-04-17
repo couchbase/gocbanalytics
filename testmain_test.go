@@ -1,4 +1,4 @@
-package ganalytics_test
+package cbanalytics_test
 
 import (
 	"context"
@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	ganalytics "github.com/couchbase/ganalytics"
-	"github.com/couchbase/ganalytics/internal/leakcheck"
+	cbanalytics "github.com/couchbase/gocbanalytics"
+	"github.com/couchbase/gocbanalytics/internal/leakcheck"
 )
 
 var TestOpts TestOptions
@@ -53,7 +53,7 @@ func TestMain(m *testing.M) {
 	if !*disableLogger {
 		// Set up our special logger which logs the log level count
 		globalTestLogger = createTestLogger()
-		ganalytics.SetLogger(globalTestLogger)
+		cbanalytics.SetLogger(globalTestLogger)
 	}
 
 	TestOpts.OriginalConnStr = *connStr
@@ -73,13 +73,13 @@ func TestMain(m *testing.M) {
 
 		var preLogTotal uint64
 
-		for i := 0; i < int(ganalytics.LogMaxVerbosity); i++ {
+		for i := 0; i < int(cbanalytics.LogMaxVerbosity); i++ {
 			count := atomic.LoadUint64(&globalTestLogger.LogCount[i])
 			preLogTotal += count
-			log.Printf("  (%s): %d", logLevelToString(ganalytics.LogLevel(i)), count)
+			log.Printf("  (%s): %d", logLevelToString(cbanalytics.LogLevel(i)), count)
 		}
 
-		abnormalLogCount := atomic.LoadUint64(&globalTestLogger.LogCount[ganalytics.LogError]) + atomic.LoadUint64(&globalTestLogger.LogCount[ganalytics.LogWarn])
+		abnormalLogCount := atomic.LoadUint64(&globalTestLogger.LogCount[cbanalytics.LogError]) + atomic.LoadUint64(&globalTestLogger.LogCount[cbanalytics.LogWarn])
 		if abnormalLogCount > 0 {
 			log.Printf("Detected unexpected logging, failing")
 
@@ -92,10 +92,10 @@ func TestMain(m *testing.M) {
 
 		var postLogTotal uint64
 
-		for i := 0; i < int(ganalytics.LogMaxVerbosity); i++ {
+		for i := 0; i < int(cbanalytics.LogMaxVerbosity); i++ {
 			count := atomic.LoadUint64(&globalTestLogger.LogCount[i])
 			postLogTotal += count
-			log.Printf("  (%s): %d", logLevelToString(ganalytics.LogLevel(i)), count)
+			log.Printf("  (%s): %d", logLevelToString(cbanalytics.LogLevel(i)), count)
 		}
 
 		if preLogTotal != postLogTotal {
@@ -113,11 +113,11 @@ func TestMain(m *testing.M) {
 }
 
 func setupColumnar() {
-	cluster, err := ganalytics.NewCluster(TestOpts.OriginalConnStr, ganalytics.NewCredential(TestOpts.Username, TestOpts.Password), DefaultOptions())
+	cluster, err := cbanalytics.NewCluster(TestOpts.OriginalConnStr, cbanalytics.NewCredential(TestOpts.Username, TestOpts.Password), DefaultOptions())
 	if err != nil {
 		panic(err)
 	}
-	defer func(cluster *ganalytics.Cluster) {
+	defer func(cluster *cbanalytics.Cluster) {
 		err := cluster.Close()
 		if err != nil {
 			panic(err)
@@ -163,26 +163,26 @@ func envFlagString(envName, name, value, usage string) *string {
 	return flag.String(name, value, usage)
 }
 
-func DefaultOptions() *ganalytics.ClusterOptions {
-	return ganalytics.NewClusterOptions().SetSecurityOptions(ganalytics.NewSecurityOptions().SetDisableServerCertificateVerification(true))
+func DefaultOptions() *cbanalytics.ClusterOptions {
+	return cbanalytics.NewClusterOptions().SetSecurityOptions(cbanalytics.NewSecurityOptions().SetDisableServerCertificateVerification(true))
 }
 
 var globalTestLogger *testLogger
 
 type testLogger struct {
-	Parent           ganalytics.Logger
+	Parent           cbanalytics.Logger
 	LogCount         []uint64
 	suppressWarnings uint32
 }
 
-func (logger *testLogger) Log(level ganalytics.LogLevel, offset int, format string, v ...interface{}) error {
-	if level >= 0 && level < ganalytics.LogMaxVerbosity {
-		if atomic.LoadUint32(&logger.suppressWarnings) == 1 && level == ganalytics.LogWarn {
-			level = ganalytics.LogInfo
+func (logger *testLogger) Log(level cbanalytics.LogLevel, offset int, format string, v ...interface{}) error {
+	if level >= 0 && level < cbanalytics.LogMaxVerbosity {
+		if atomic.LoadUint32(&logger.suppressWarnings) == 1 && level == cbanalytics.LogWarn {
+			level = cbanalytics.LogInfo
 		}
 		// We suppress this warning as this is ok.
 		if strings.Contains(format, "server certificate verification is disabled") {
-			level = ganalytics.LogInfo
+			level = cbanalytics.LogInfo
 		}
 
 		atomic.AddUint64(&logger.LogCount[level], 1)
@@ -201,25 +201,25 @@ func (logger *testLogger) SuppressWarnings(suppress bool) {
 
 func createTestLogger() *testLogger {
 	return &testLogger{
-		Parent:           ganalytics.VerboseStdioLogger(),
-		LogCount:         make([]uint64, ganalytics.LogMaxVerbosity),
+		Parent:           cbanalytics.VerboseStdioLogger(),
+		LogCount:         make([]uint64, cbanalytics.LogMaxVerbosity),
 		suppressWarnings: 0,
 	}
 }
 
-func logLevelToString(level ganalytics.LogLevel) string {
+func logLevelToString(level cbanalytics.LogLevel) string {
 	switch level {
-	case ganalytics.LogError:
+	case cbanalytics.LogError:
 		return "error"
-	case ganalytics.LogWarn:
+	case cbanalytics.LogWarn:
 		return "warn"
-	case ganalytics.LogInfo:
+	case cbanalytics.LogInfo:
 		return "info"
-	case ganalytics.LogDebug:
+	case cbanalytics.LogDebug:
 		return "debug"
-	case ganalytics.LogTrace:
+	case cbanalytics.LogTrace:
 		return "trace"
-	case ganalytics.LogSched:
+	case cbanalytics.LogSched:
 		return "sched"
 	}
 

@@ -12,7 +12,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/couchbase/ganalytics/internal/leakcheck"
+	"github.com/couchbase/gocbanalytics/internal/leakcheck"
 )
 
 // Query executes a query.
