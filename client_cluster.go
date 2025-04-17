@@ -96,7 +96,7 @@ func newHTTPClusterClient(opts clusterClientOptions) (*httpClusterClient, error)
 	}
 
 	clientOpts := httpqueryclient.ClientConfig{
-		TLSConfig: createTlsConfig(opts.CipherSuites, pool, opts.Logger),
+		TLSConfig: createTLSConfig(opts.Address.Host, opts.CipherSuites, pool, opts.Logger),
 		Logger:    opts.Logger,
 	}
 
@@ -142,22 +142,27 @@ func (c *httpClusterClient) Close() error {
 	return nil
 }
 
-func createTlsConfig(cipherSuite []*tls.CipherSuite, pool *x509.CertPool, logger Logger) *tls.Config {
+func createTLSConfig(endpoint string, cipherSuite []*tls.CipherSuite, pool *x509.CertPool, logger Logger) *tls.Config {
 	var suites []uint16
 
 	if cipherSuite != nil {
 		suites = make([]uint16, len(cipherSuite))
+
 		for i, suite := range cipherSuite {
 			var s uint16
+
 			for _, suiteID := range tls.CipherSuites() {
 				if suite.Name == suiteID.Name {
 					s = suiteID.ID
+
 					break
 				}
 			}
+
 			for _, suiteID := range tls.InsecureCipherSuites() {
 				if suite.Name == suiteID.Name {
 					s = suiteID.ID
+
 					break
 				}
 			}
@@ -175,10 +180,11 @@ func createTlsConfig(cipherSuite []*tls.CipherSuite, pool *x509.CertPool, logger
 		insecureSkipVerify = true
 	}
 
-	return &tls.Config{
+	return &tls.Config{ //nolint:exhaustruct
 		MinVersion:         tls.VersionTLS13,
 		CipherSuites:       suites,
 		RootCAs:            pool,
 		InsecureSkipVerify: insecureSkipVerify,
+		ServerName:         endpoint,
 	}
 }
