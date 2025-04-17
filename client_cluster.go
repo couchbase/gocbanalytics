@@ -7,8 +7,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/couchbaselabs/gocbconnstr"
-
 	"github.com/couchbase/ganalytics/internal/httpqueryclient"
 )
 
@@ -25,7 +23,6 @@ type address struct {
 }
 
 type clusterClientOptions struct {
-	Spec                                 gocbconnstr.ConnSpec
 	Credential                           *Credential
 	ConnectTimeout                       time.Duration
 	ServerQueryTimeout                   time.Duration
@@ -50,12 +47,7 @@ type httpClusterClient struct {
 }
 
 func newHTTPClusterClient(opts clusterClientOptions) (*httpClusterClient, error) {
-	port := opts.Address.Port
-	if port == -1 {
-		port = 11207
-	}
-
-	addr := fmt.Sprintf("%s:%d", opts.Address.Host, port)
+	addr := fmt.Sprintf("%s:%d", opts.Address.Host, opts.Address.Port)
 
 	trustOnly := opts.TrustOnly
 	if trustOnly == nil {

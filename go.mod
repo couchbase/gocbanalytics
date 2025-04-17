@@ -3,7 +3,6 @@ module github.com/couchbase/ganalytics
 go 1.21.5
 
 require (
-	github.com/couchbaselabs/gocbconnstr v1.0.5
 	github.com/google/uuid v1.6.0
 	github.com/stretchr/testify v1.10.0
 )

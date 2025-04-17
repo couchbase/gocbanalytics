@@ -3,11 +3,10 @@ package ganalytics
 import (
 	"crypto/tls"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/couchbaselabs/gocbconnstr"
 )
 
 // Cluster is the main entry point for the SDK.
@@ -17,8 +16,10 @@ type Cluster struct {
 }
 
 // NewCluster creates a new Cluster instance.
-func NewCluster(connStr string, credential Credential, opts ...*ClusterOptions) (*Cluster, error) {
-	connSpec, err := gocbconnstr.Parse(connStr)
+func NewCluster(httpEndpoint string, credential Credential, opts ...*ClusterOptions) (*Cluster, error) {
+	// This is leaking implementation detail of the client abstraction a little bit, but it's ok.
+	// There's no point in overcomplicating this for the sake of perfection.
+	connSpec, err := url.Parse(httpEndpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -30,17 +31,25 @@ func NewCluster(connStr string, credential Credential, opts ...*ClusterOptions) 
 		}
 	}
 
-	addr := address{
-		Host: connSpec.Addresses[0].Host,
-		Port: connSpec.Addresses[0].Port,
+	var port int
+	if connSpec.Port() == "" {
+		if connSpec.Scheme == "https" {
+			port = 443
+		} else if connSpec.Scheme == "http" {
+			port = 80
+		}
+	} else {
+		thisPort, err := strconv.Atoi(connSpec.Port())
+		if err != nil {
+			return nil, err //nolint:err113
+		}
+
+		port = thisPort
 	}
 
-	if addr.Port == -1 {
-		if connSpec.Scheme == "https" {
-			addr.Port = 443
-		} else if connSpec.Scheme == "http" {
-			addr.Port = 80
-		}
+	addr := address{
+		Host: connSpec.Hostname(),
+		Port: port,
 	}
 
 	clusterOpts := mergeClusterOptions(opts...)
@@ -75,13 +84,18 @@ func NewCluster(connStr string, credential Credential, opts ...*ClusterOptions) 
 		queryTimeout = *timeoutOpts.QueryTimeout
 	}
 
+	query, err := url.ParseQuery(connSpec.RawQuery)
+	if err != nil {
+		return nil, err //nolint:err113
+	}
+
 	fetchOption := func(name string) (string, bool) {
-		optValue := connSpec.Options[name]
-		if len(optValue) == 0 {
+		hasName := query.Has(name)
+		if !hasName {
 			return "", false
 		}
 
-		return optValue[len(optValue)-1], true
+		return query.Get(name), true
 	}
 
 	if valStr, ok := fetchOption("timeout.connect_timeout"); ok {
@@ -179,20 +193,6 @@ func NewCluster(connStr string, credential Credential, opts ...*ClusterOptions) 
 		}
 	}
 
-	if len(connSpec.Addresses) == 0 {
-		return nil, invalidArgumentError{
-			ArgumentName: "Endpoint",
-			Reason:       "an endpoint must be specified",
-		}
-	}
-
-	if len(connSpec.Addresses) > 1 {
-		return nil, invalidArgumentError{
-			ArgumentName: "Endpoint",
-			Reason:       "multiple endpoints are not supported",
-		}
-	}
-
 	unmarshaler := clusterOpts.Unmarshaler
 	if unmarshaler == nil {
 		unmarshaler = NewJSONUnmarshaler()
@@ -203,7 +203,6 @@ func NewCluster(connStr string, credential Credential, opts ...*ClusterOptions) 
 	}
 
 	mgr, err := newClusterClient(clusterClientOptions{
-		Spec:                                 connSpec,
 		Credential:                           &credential,
 		ConnectTimeout:                       connectTimeout,
 		ServerQueryTimeout:                   queryTimeout,
