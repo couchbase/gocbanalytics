@@ -52,6 +52,13 @@ func NewCluster(httpEndpoint string, credential Credential, opts ...*ClusterOpti
 		Port: port,
 	}
 
+	if credential == nil {
+		return nil, invalidArgumentError{
+			ArgumentName: "Credential",
+			Reason:       "cannot be nil",
+		}
+	}
+
 	clusterOpts := mergeClusterOptions(opts...)
 
 	if clusterOpts == nil {
@@ -203,7 +210,7 @@ func NewCluster(httpEndpoint string, credential Credential, opts ...*ClusterOpti
 	}
 
 	mgr, err := newClusterClient(clusterClientOptions{
-		Credential:                           &credential,
+		Credential:                           credential,
 		ConnectTimeout:                       connectTimeout,
 		ServerQueryTimeout:                   queryTimeout,
 		TrustOnly:                            securityOpts.TrustOnly,

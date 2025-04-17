@@ -53,7 +53,6 @@ func TestMain(m *testing.M) {
 	if !*disableLogger {
 		// Set up our special logger which logs the log level count
 		globalTestLogger = createTestLogger()
-		cbanalytics.SetLogger(globalTestLogger)
 	}
 
 	TestOpts.OriginalConnStr = *connStr
@@ -73,7 +72,7 @@ func TestMain(m *testing.M) {
 
 		var preLogTotal uint64
 
-		for i := 0; i < int(cbanalytics.LogMaxVerbosity); i++ {
+		for i := 0; i < int(cbanalytics.LogTrace); i++ {
 			count := atomic.LoadUint64(&globalTestLogger.LogCount[i])
 			preLogTotal += count
 			log.Printf("  (%s): %d", logLevelToString(cbanalytics.LogLevel(i)), count)
@@ -92,7 +91,7 @@ func TestMain(m *testing.M) {
 
 		var postLogTotal uint64
 
-		for i := 0; i < int(cbanalytics.LogMaxVerbosity); i++ {
+		for i := 0; i < int(cbanalytics.LogTrace); i++ {
 			count := atomic.LoadUint64(&globalTestLogger.LogCount[i])
 			postLogTotal += count
 			log.Printf("  (%s): %d", logLevelToString(cbanalytics.LogLevel(i)), count)
@@ -113,7 +112,7 @@ func TestMain(m *testing.M) {
 }
 
 func setupColumnar() {
-	cluster, err := cbanalytics.NewCluster(TestOpts.OriginalConnStr, cbanalytics.NewCredential(TestOpts.Username, TestOpts.Password), DefaultOptions())
+	cluster, err := cbanalytics.NewCluster(TestOpts.OriginalConnStr, cbanalytics.NewBasicAuthCredential(TestOpts.Username, TestOpts.Password), DefaultOptions())
 	if err != nil {
 		panic(err)
 	}
@@ -163,11 +162,11 @@ func envFlagString(envName, name, value, usage string) *string {
 	return flag.String(name, value, usage)
 }
 
-func DefaultOptions() *cbanalytics.ClusterOptions {
-	return cbanalytics.NewClusterOptions().SetSecurityOptions(cbanalytics.NewSecurityOptions().SetDisableServerCertificateVerification(true))
-}
-
 var globalTestLogger *testLogger
+
+func DefaultOptions() *cbanalytics.ClusterOptions {
+	return cbanalytics.NewClusterOptions().SetSecurityOptions(cbanalytics.NewSecurityOptions().SetDisableServerCertificateVerification(true)).SetLogger(globalTestLogger)
+}
 
 type testLogger struct {
 	Parent           cbanalytics.Logger
@@ -175,20 +174,29 @@ type testLogger struct {
 	suppressWarnings uint32
 }
 
-func (logger *testLogger) Log(level cbanalytics.LogLevel, offset int, format string, v ...interface{}) error {
-	if level >= 0 && level < cbanalytics.LogMaxVerbosity {
-		if atomic.LoadUint32(&logger.suppressWarnings) == 1 && level == cbanalytics.LogWarn {
-			level = cbanalytics.LogInfo
-		}
-		// We suppress this warning as this is ok.
-		if strings.Contains(format, "server certificate verification is disabled") {
-			level = cbanalytics.LogInfo
-		}
+func (logger *testLogger) Error(format string, v ...interface{}) {
+	logger.Parent.Error(format, v...)
+}
 
-		atomic.AddUint64(&logger.LogCount[level], 1)
+func (logger *testLogger) Warn(format string, v ...interface{}) {
+	if atomic.LoadUint32(&logger.suppressWarnings) == 1 || strings.Contains(format, "server certificate verification is disabled") {
+		logger.Parent.Info(format, v...)
+		return
 	}
 
-	return logger.Parent.Log(level, offset+1, fmt.Sprintf("[%s] ", logLevelToString(level))+format, v...) // nolint:wrapcheck
+	logger.Parent.Warn(format, v...)
+}
+
+func (logger *testLogger) Info(format string, v ...interface{}) {
+	logger.Parent.Info(format, v...)
+}
+
+func (logger *testLogger) Debug(format string, v ...interface{}) {
+	logger.Parent.Debug(format, v...)
+}
+
+func (logger *testLogger) Trace(format string, v ...interface{}) {
+	logger.Parent.Trace(format, v...)
 }
 
 func (logger *testLogger) SuppressWarnings(suppress bool) {
@@ -201,8 +209,8 @@ func (logger *testLogger) SuppressWarnings(suppress bool) {
 
 func createTestLogger() *testLogger {
 	return &testLogger{
-		Parent:           cbanalytics.VerboseStdioLogger(),
-		LogCount:         make([]uint64, cbanalytics.LogMaxVerbosity),
+		Parent:           cbanalytics.NewVerboseLogger(),
+		LogCount:         make([]uint64, cbanalytics.LogTrace),
 		suppressWarnings: 0,
 	}
 }
@@ -219,8 +227,6 @@ func logLevelToString(level cbanalytics.LogLevel) string {
 		return "debug"
 	case cbanalytics.LogTrace:
 		return "trace"
-	case cbanalytics.LogSched:
-		return "sched"
 	}
 
 	return fmt.Sprintf("unknown (%d)", level)

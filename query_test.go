@@ -13,7 +13,7 @@ import (
 )
 
 func TestBasicQuery(t *testing.T) {
-	cluster, err := cbanalytics.NewCluster(TestOpts.OriginalConnStr, cbanalytics.NewCredential(TestOpts.Username, TestOpts.Password), DefaultOptions())
+	cluster, err := cbanalytics.NewCluster(TestOpts.OriginalConnStr, cbanalytics.NewBasicAuthCredential(TestOpts.Username, TestOpts.Password), DefaultOptions())
 	require.NoError(t, err)
 	defer func(cluster *cbanalytics.Cluster) {
 		err := cluster.Close()
@@ -45,7 +45,7 @@ func TestBasicQuery(t *testing.T) {
 }
 
 func TestBasicBufferedQuery(t *testing.T) {
-	cluster, err := cbanalytics.NewCluster(TestOpts.OriginalConnStr, cbanalytics.NewCredential(TestOpts.Username, TestOpts.Password), DefaultOptions())
+	cluster, err := cbanalytics.NewCluster(TestOpts.OriginalConnStr, cbanalytics.NewBasicAuthCredential(TestOpts.Username, TestOpts.Password), DefaultOptions())
 	require.NoError(t, err)
 	defer func(cluster *cbanalytics.Cluster) {
 		err := cluster.Close()
@@ -77,7 +77,7 @@ func TestDispatchTimeout(t *testing.T) {
 
 	newCluster := func(tt *testing.T, dispatchTimeout time.Duration) *cbanalytics.Cluster {
 		cluster, err := cbanalytics.NewCluster("couchbases://somenonsense?srv=false",
-			cbanalytics.NewCredential(TestOpts.Username, TestOpts.Password),
+			cbanalytics.NewBasicAuthCredential(TestOpts.Username, TestOpts.Password),
 			DefaultOptions().SetTimeoutOptions(cbanalytics.NewTimeoutOptions().SetQueryTimeout(dispatchTimeout)),
 		)
 		require.NoError(tt, err)
@@ -171,7 +171,7 @@ func TestDispatchTimeout(t *testing.T) {
 
 func TestOperationTimeout(t *testing.T) {
 	cluster, err := cbanalytics.NewCluster(TestOpts.OriginalConnStr,
-		cbanalytics.NewCredential(TestOpts.Username, TestOpts.Password),
+		cbanalytics.NewBasicAuthCredential(TestOpts.Username, TestOpts.Password),
 		DefaultOptions(),
 	)
 	require.NoError(t, err)
@@ -217,7 +217,7 @@ func TestOperationTimeout(t *testing.T) {
 
 	t.Run("Timeout", func(tt *testing.T) {
 		cluster, err := cbanalytics.NewCluster(TestOpts.OriginalConnStr,
-			cbanalytics.NewCredential(TestOpts.Username, TestOpts.Password),
+			cbanalytics.NewBasicAuthCredential(TestOpts.Username, TestOpts.Password),
 			DefaultOptions().SetTimeoutOptions(cbanalytics.NewTimeoutOptions().SetQueryTimeout(1*time.Second)),
 		)
 		require.NoError(tt, err)
@@ -243,7 +243,7 @@ func TestOperationTimeout(t *testing.T) {
 
 func TestQueryError(t *testing.T) {
 	cluster, err := cbanalytics.NewCluster(TestOpts.OriginalConnStr,
-		cbanalytics.NewCredential(TestOpts.Username, TestOpts.Password),
+		cbanalytics.NewBasicAuthCredential(TestOpts.Username, TestOpts.Password),
 		DefaultOptions(),
 	)
 	require.NoError(t, err)
@@ -278,7 +278,7 @@ func TestUnmarshaler(t *testing.T) {
 	}
 
 	cluster, err := cbanalytics.NewCluster(TestOpts.OriginalConnStr,
-		cbanalytics.NewCredential(TestOpts.Username, TestOpts.Password),
+		cbanalytics.NewBasicAuthCredential(TestOpts.Username, TestOpts.Password),
 		DefaultOptions().SetUnmarshaler(unmarshaler),
 	)
 	require.NoError(t, err)

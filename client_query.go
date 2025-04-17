@@ -22,6 +22,7 @@ type queryClientNamespace struct {
 	Scope    string
 }
 type httpQueryClient struct {
+	credential                Credential
 	client                    *httpqueryclient.Client
 	defaultServerQueryTimeout time.Duration
 	defaultUnmarshaler        Unmarshaler
@@ -30,6 +31,7 @@ type httpQueryClient struct {
 }
 
 type httpQueryClientConfig struct {
+	Credential                Credential
 	Client                    *httpqueryclient.Client
 	DefaultServerQueryTimeout time.Duration
 	DefaultUnmarshaler        Unmarshaler
@@ -39,6 +41,7 @@ type httpQueryClientConfig struct {
 
 func newHTTPQueryClient(cfg httpQueryClientConfig) *httpQueryClient {
 	return &httpQueryClient{
+		credential:                cfg.Credential,
 		client:                    cfg.Client,
 		defaultServerQueryTimeout: cfg.DefaultServerQueryTimeout,
 		defaultUnmarshaler:        cfg.DefaultUnmarshaler,
@@ -131,9 +134,24 @@ func (c *httpQueryClient) translateQueryOptions(ctx context.Context, statement s
 
 	execOpts["statement"] = statement
 
+	var credentialProvider func() (string, string)
+	switch credential := c.credential.(type) {
+	case *BasicAuthCredential:
+		credentialProvider = func() (string, string) {
+			return credential.UserPassPair.Username, credential.UserPassPair.Password
+		}
+	case *DynamicBasicAuthCredential:
+		credentialProvider = func() (string, string) {
+			userPassPair := credential.Credentials()
+
+			return userPassPair.Username, userPassPair.Password
+		}
+	}
+
 	return &httpqueryclient.QueryOptions{
-		Payload:  execOpts,
-		Priority: priority,
+		Payload:            execOpts,
+		Priority:           priority,
+		CredentialProvider: credentialProvider,
 	}, nil
 }
 

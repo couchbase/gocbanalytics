@@ -68,9 +68,7 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 		req.Header = header
 
 		username, password := opts.CredentialProvider()
-		if username != "" && password != "" {
-			req.SetBasicAuth(username, password)
-		}
+		req.SetBasicAuth(username, password)
 
 		resp, err := c.innerClient.Do(req)
 		if err != nil {

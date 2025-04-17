@@ -23,7 +23,7 @@ type address struct {
 }
 
 type clusterClientOptions struct {
-	Credential                           *Credential
+	Credential                           Credential
 	ConnectTimeout                       time.Duration
 	ServerQueryTimeout                   time.Duration
 	TrustOnly                            TrustOnly
@@ -41,6 +41,7 @@ func newClusterClient(opts clusterClientOptions) (clusterClient, error) {
 type httpClusterClient struct {
 	client *httpqueryclient.Client
 
+	credential         Credential
 	serverQueryTimeout time.Duration
 	unmarshaler        Unmarshaler
 	logger             Logger
@@ -100,6 +101,7 @@ func newHTTPClusterClient(opts clusterClientOptions) (*httpClusterClient, error)
 	client := httpqueryclient.NewClient(addr, clientOpts)
 
 	return &httpClusterClient{
+		credential:         opts.Credential,
 		client:             client,
 		serverQueryTimeout: opts.ServerQueryTimeout,
 		unmarshaler:        opts.Unmarshaler,
