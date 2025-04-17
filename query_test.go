@@ -195,12 +195,11 @@ func TestUnmarshaler(t *testing.T) {
 		res, err := queryable.ExecuteQuery(ctx, "FROM RANGE(0, 1) AS i SELECT RAW i")
 		require.NoError(tt, err)
 
-		row := res.NextRow()
-		require.NotNil(tt, row)
-
-		var val interface{}
-		err = row.ContentAs(&val)
-		require.ErrorIs(tt, err, unmarshaler.Err)
+		for row := res.NextRow(); row != nil; row = res.NextRow() {
+			var val interface{}
+			err = row.ContentAs(&val)
+			require.ErrorIs(tt, err, unmarshaler.Err)
+		}
 	})
 }
 
