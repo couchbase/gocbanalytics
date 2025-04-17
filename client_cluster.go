@@ -59,7 +59,7 @@ func newHTTPClusterClient(opts clusterClientOptions) (*httpClusterClient, error)
 
 	trustOnly := opts.TrustOnly
 	if trustOnly == nil {
-		trustOnly = TrustOnlyCapella{}
+		trustOnly = trustCapellaAndSystem{}
 	}
 
 	var pool *x509.CertPool
@@ -87,6 +87,14 @@ func newHTTPClusterClient(opts clusterClientOptions) (*httpClusterClient, error)
 		pool.AppendCertsFromPEM([]byte(to.Pem))
 	case TrustOnlyCertificates:
 		pool = to.Certificates
+	case trustCapellaAndSystem:
+		certPool, err := x509.SystemCertPool()
+		if err != nil {
+			return nil, fmt.Errorf("failed to read system cert pool %w", err)
+		}
+
+		certPool.AppendCertsFromPEM(capellaRootCA)
+		pool = certPool
 	}
 
 	if opts.DisableServerCertificateVerification != nil && *opts.DisableServerCertificateVerification {

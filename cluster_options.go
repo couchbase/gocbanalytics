@@ -42,6 +42,10 @@ type TrustOnlySystem struct{}
 
 func (t TrustOnlySystem) trustOnly() {}
 
+type trustCapellaAndSystem struct{}
+
+func (t trustCapellaAndSystem) trustOnly() {}
+
 // SecurityOptions specifies options for controlling security related
 // items such as TLS root certificates and verification skipping.
 type SecurityOptions struct {
