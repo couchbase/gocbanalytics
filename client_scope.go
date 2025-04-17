@@ -1,9 +1,8 @@
-package cbcolumnar
+package ganalytics
 
 import (
+	"github.com/couchbase/ganalytics/internal/httpqueryclient"
 	"time"
-
-	"github.com/couchbase/gocbcore/v10"
 )
 
 type scopeClient interface {
@@ -11,33 +10,48 @@ type scopeClient interface {
 	QueryClient() queryClient
 }
 
-type gocbcoreScopeClient struct {
-	agent                     *gocbcore.ColumnarAgent
+type httpScopeClient struct {
+	client                    *httpqueryclient.Client
 	name                      string
 	databaseName              string
 	defaultServerQueryTimeout time.Duration
 	defaultUnmarshaler        Unmarshaler
+	logger                    Logger
 }
 
-func newGocbcoreScopeClient(agent *gocbcore.ColumnarAgent, name, databaseName string,
-	defaultServerQueryTimeout time.Duration, defaultUnmarshaler Unmarshaler) *gocbcoreScopeClient {
-	return &gocbcoreScopeClient{
-		agent:                     agent,
-		name:                      name,
-		databaseName:              databaseName,
-		defaultServerQueryTimeout: defaultServerQueryTimeout,
-		defaultUnmarshaler:        defaultUnmarshaler,
+type httpScopeClientConfig struct {
+	Client                    *httpqueryclient.Client
+	DatabaseName              string
+	Name                      string
+	DefaultServerQueryTimeout time.Duration
+	DefaultUnmarshaler        Unmarshaler
+	Logger                    Logger
+}
+
+func newHTTPScopeClient(cfg httpScopeClientConfig) *httpScopeClient {
+	return &httpScopeClient{
+		client:                    cfg.Client,
+		name:                      cfg.Name,
+		databaseName:              cfg.DatabaseName,
+		defaultServerQueryTimeout: cfg.DefaultServerQueryTimeout,
+		defaultUnmarshaler:        cfg.DefaultUnmarshaler,
+		logger:                    cfg.Logger,
 	}
 }
 
-func (c *gocbcoreScopeClient) Name() string {
+func (c *httpScopeClient) Name() string {
 	return c.name
 }
 
-func (c *gocbcoreScopeClient) QueryClient() queryClient {
-	return newGocbcoreQueryClient(c.agent, c.defaultServerQueryTimeout, c.defaultUnmarshaler,
-		&gocbcoreQueryClientNamespace{
+func (c *httpScopeClient) QueryClient() queryClient {
+	return newHTTPQueryClient(httpQueryClientConfig{
+		Client:                    c.client,
+		DefaultServerQueryTimeout: c.defaultServerQueryTimeout,
+		DefaultUnmarshaler:        c.defaultUnmarshaler,
+		Namespace: &queryClientNamespace{
 			Database: c.databaseName,
 			Scope:    c.name,
-		})
+		},
+		Logger: c.logger,
+	})
 }

@@ -1,9 +1,8 @@
-package cbcolumnar
+package ganalytics
 
 import (
 	"crypto/tls"
 	"fmt"
-	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -24,10 +23,10 @@ func NewCluster(connStr string, credential Credential, opts ...*ClusterOptions) 
 		return nil, err
 	}
 
-	if connSpec.Scheme != "couchbases" {
+	if connSpec.Scheme != "https" && connSpec.Scheme != "http" {
 		return nil, invalidArgumentError{
 			ArgumentName: "scheme",
-			Reason:       "only couchbases scheme is supported",
+			Reason:       "only http and https schemes are supported",
 		}
 	}
 
@@ -37,9 +36,13 @@ func NewCluster(connStr string, credential Credential, opts ...*ClusterOptions) 
 		clusterOpts = NewClusterOptions()
 	}
 
+	logger := clusterOpts.Logger
+	if logger == nil {
+		logger = NewNoopLogger()
+	}
+
 	connectTimeout := 10000 * time.Millisecond
 	queryTimeout := 10 * time.Minute
-	useSrv := true
 
 	timeoutOpts := clusterOpts.TimeoutOptions
 	if timeoutOpts == nil {
@@ -66,18 +69,6 @@ func NewCluster(connStr string, credential Credential, opts ...*ClusterOptions) 
 		}
 
 		return optValue[len(optValue)-1], true
-	}
-
-	if valStr, ok := fetchOption("srv"); ok {
-		val, err := strconv.ParseBool(valStr)
-		if err != nil {
-			return nil, invalidArgumentError{
-				ArgumentName: "srv",
-				Reason:       err.Error(),
-			}
-		}
-
-		useSrv = val
 	}
 
 	if valStr, ok := fetchOption("timeout.connect_timeout"); ok {
@@ -143,7 +134,7 @@ func NewCluster(connStr string, credential Credential, opts ...*ClusterOptions) 
 
 		for _, unsupportedSuite := range tls.InsecureCipherSuites() {
 			if unsupportedSuite.Name == suite {
-				logWarnf("cipher suite %s is insecure, it is not recommended to use this", suite)
+				logger.Warn("cipher suite %s is insecure, it is not recommended to use this", suite)
 
 				s = unsupportedSuite
 
@@ -175,36 +166,17 @@ func NewCluster(connStr string, credential Credential, opts ...*ClusterOptions) 
 		}
 	}
 
-	var addrs []address
-
-	srvRecord := connSpec.SrvRecordName()
-
-	if srvRecord == "" {
-		useSrv = false
+	if len(connSpec.Addresses) == 0 {
+		return nil, invalidArgumentError{
+			ArgumentName: "Endpoint",
+			Reason:       "an endpoint must be specified",
+		}
 	}
 
-	if useSrv {
-		_, srvAddrs, err := net.LookupSRV("couchbases", "tcp", connSpec.Addresses[0].Host)
-		if err != nil {
-			if isLogRedactionLevelFull() {
-				logInfof("Failed to lookup SRV record: %s", redactSystemData(err))
-			} else {
-				logInfof("Failed to lookup SRV record: %s", err)
-			}
-		}
-
-		for _, srvAddrs := range srvAddrs {
-			addrs = append(addrs, address{
-				Host: strings.TrimSuffix(srvAddrs.Target, "."),
-				Port: int(srvAddrs.Port),
-			})
-		}
-	} else {
-		for _, addr := range connSpec.Addresses {
-			addrs = append(addrs, address{
-				Host: addr.Host,
-				Port: addr.Port,
-			})
+	if len(connSpec.Addresses) > 1 {
+		return nil, invalidArgumentError{
+			ArgumentName: "Endpoint",
+			Reason:       "multiple endpoints are not supported",
 		}
 	}
 
@@ -214,7 +186,7 @@ func NewCluster(connStr string, credential Credential, opts ...*ClusterOptions) 
 	}
 
 	if clusterOpts.SecurityOptions.DisableServerCertificateVerification != nil && *clusterOpts.SecurityOptions.DisableServerCertificateVerification {
-		logWarnf("server certificate verification is disabled, this is insecure")
+		logger.Warn("server certificate verification is disabled, this is insecure")
 	}
 
 	mgr, err := newClusterClient(clusterClientOptions{
@@ -225,9 +197,12 @@ func NewCluster(connStr string, credential Credential, opts ...*ClusterOptions) 
 		TrustOnly:                            securityOpts.TrustOnly,
 		DisableServerCertificateVerification: securityOpts.DisableServerCertificateVerification,
 		CipherSuites:                         cipherSuites,
-		DisableSrv:                           !useSrv,
-		Addresses:                            addrs,
-		Unmarshaler:                          unmarshaler,
+		Address: address{
+			Host: connSpec.Addresses[0].Host,
+			Port: connSpec.Addresses[0].Port,
+		},
+		Unmarshaler: unmarshaler,
+		Logger:      logger,
 	})
 	if err != nil {
 		return nil, err

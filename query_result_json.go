@@ -1,4 +1,4 @@
-package cbcolumnar
+package ganalytics
 
 import (
 	"time"
@@ -54,12 +54,14 @@ func (meta *QueryMetadata) fromData(data jsonAnalyticsResponse) {
 func (metrics *QueryMetrics) fromData(data jsonAnalyticsMetrics) {
 	elapsedTime, err := time.ParseDuration(data.ElapsedTime)
 	if err != nil {
-		logDebugf("Failed to parse query metrics elapsed time: %s", err)
+		// TODO: Log?
+		// logDebugf("Failed to parse query metrics elapsed time: %s", err)
 	}
 
 	executionTime, err := time.ParseDuration(data.ExecutionTime)
 	if err != nil {
-		logDebugf("Failed to parse query metrics execution time: %s", err)
+		// TODO: Log?
+		// logDebugf("Failed to parse query metrics execution time: %s", err)
 	}
 
 	metrics.ElapsedTime = elapsedTime

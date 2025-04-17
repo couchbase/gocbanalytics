@@ -1,4 +1,4 @@
-package cbcolumnar
+package ganalytics
 
 const (
 	versionStr = "v1.0.0"

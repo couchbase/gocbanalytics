@@ -1,4 +1,4 @@
-package cbcolumnar
+package ganalytics
 
 import (
 	"crypto/x509"
@@ -133,6 +133,9 @@ type ClusterOptions struct {
 
 	// Unmarshaler specifies the default unmarshaler to use for decoding query response rows.
 	Unmarshaler Unmarshaler
+
+	// Logger specifies the logger to use for logging.
+	Logger Logger
 }
 
 // NewClusterOptions creates a new instance of ClusterOptions.
@@ -148,6 +151,7 @@ func NewClusterOptions() *ClusterOptions {
 			CipherSuites:                         nil,
 		},
 		Unmarshaler: nil,
+		Logger:      nil,
 	}
 }
 
@@ -168,6 +172,13 @@ func (co *ClusterOptions) SetSecurityOptions(securityOptions *SecurityOptions) *
 // SetUnmarshaler sets the Unmarshaler field in ClusterOptions.
 func (co *ClusterOptions) SetUnmarshaler(unmarshaler Unmarshaler) *ClusterOptions {
 	co.Unmarshaler = unmarshaler
+
+	return co
+}
+
+// SetLogger sets the Logger field in ClusterOptions.
+func (co *ClusterOptions) SetLogger(logger Logger) *ClusterOptions {
+	co.Logger = logger
 
 	return co
 }
@@ -225,6 +236,10 @@ func mergeClusterOptions(opts ...*ClusterOptions) *ClusterOptions {
 
 		if opt.Unmarshaler != nil {
 			clusterOpts.Unmarshaler = opt.Unmarshaler
+		}
+
+		if opt.Logger != nil {
+			clusterOpts.Logger = opt.Logger
 		}
 	}
 

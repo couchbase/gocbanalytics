@@ -1,4 +1,4 @@
-package cbcolumnar
+package ganalytics
 
 // Database represents a Columnar database and provides access to Scope.
 type Database struct {

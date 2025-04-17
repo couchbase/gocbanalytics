@@ -1,4 +1,4 @@
-package cbcolumnar
+package ganalytics
 
 // QueryScanConsistency indicates the level of data consistency desired for an analytics query.
 type QueryScanConsistency uint

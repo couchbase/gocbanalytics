@@ -1,4 +1,4 @@
-package cbcolumnar
+package ganalytics
 
 import (
 	"encoding/json"
@@ -106,7 +106,8 @@ func (e ColumnarError) Error() string {
 		HTTPResponseCode: e.httpResponseCode,
 	})
 	if serErr != nil {
-		logErrorf("failed to serialize error to json: %s", serErr.Error())
+		// TODO: maybe log?
+		// logErrorf("failed to serialize error to json: %s", serErr.Error())
 	}
 
 	cause := e.cause

@@ -1,4 +1,4 @@
-package cbcolumnar
+package ganalytics
 
 import (
 	"crypto/tls"
@@ -7,8 +7,9 @@ import (
 	"os"
 	"time"
 
-	"github.com/couchbase/gocbcore/v10"
 	"github.com/couchbaselabs/gocbconnstr"
+
+	"github.com/couchbase/ganalytics/internal/httpqueryclient"
 )
 
 type clusterClient interface {
@@ -31,161 +32,147 @@ type clusterClientOptions struct {
 	TrustOnly                            TrustOnly
 	DisableServerCertificateVerification *bool
 	CipherSuites                         []*tls.CipherSuite
-	DisableSrv                           bool
-	Addresses                            []address
+	Address                              address
 	Unmarshaler                          Unmarshaler
+	Logger                               Logger
 }
 
 func newClusterClient(opts clusterClientOptions) (clusterClient, error) {
-	return newGocbcoreClusterClient(opts)
+	return newHTTPClusterClient(opts)
 }
 
-type gocbcoreClusterClient struct {
-	agent *gocbcore.ColumnarAgent
+type httpClusterClient struct {
+	client *httpqueryclient.Client
 
 	serverQueryTimeout time.Duration
 	unmarshaler        Unmarshaler
+	logger             Logger
 }
 
-func newGocbcoreClusterClient(opts clusterClientOptions) (*gocbcoreClusterClient, error) {
-	addresses := make([]string, len(opts.Addresses))
-
-	for i, addr := range opts.Addresses {
-		port := addr.Port
-		if port == -1 {
-			port = 11207
-		}
-
-		addresses[i] = fmt.Sprintf("%s:%d", addr.Host, port)
+func newHTTPClusterClient(opts clusterClientOptions) (*httpClusterClient, error) {
+	port := opts.Address.Port
+	if port == -1 {
+		port = 11207
 	}
 
-	var srvRecord *gocbcore.SRVRecord
-
-	if !opts.DisableSrv {
-		var host string
-		if len(opts.Addresses) > 0 {
-			host = opts.Addresses[0].Host
-		}
-
-		srvRecord = &gocbcore.SRVRecord{
-			Proto:  "tcp",
-			Scheme: "couchbases",
-			Host:   host,
-		}
-	}
+	addr := fmt.Sprintf("%s:%d", opts.Address.Host, port)
 
 	trustOnly := opts.TrustOnly
 	if trustOnly == nil {
 		trustOnly = TrustOnlyCapella{}
 	}
 
-	var caProvider func() *x509.CertPool
-
+	var pool *x509.CertPool
 	switch to := trustOnly.(type) {
 	case TrustOnlyCapella:
 		pool := x509.NewCertPool()
 		pool.AppendCertsFromPEM(capellaRootCA)
-
-		caProvider = func() *x509.CertPool {
-			return pool
-		}
 	case TrustOnlySystem:
-		pool, err := x509.SystemCertPool()
+		certPool, err := x509.SystemCertPool()
 		if err != nil {
 			return nil, fmt.Errorf("failed to read system cert pool %w", err)
 		}
 
-		caProvider = func() *x509.CertPool {
-			return pool
-		}
+		pool = certPool
 	case TrustOnlyPemFile:
 		data, err := os.ReadFile(to.Path)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read pem file %w", err)
 		}
 
-		pool := x509.NewCertPool()
+		pool = x509.NewCertPool()
 		pool.AppendCertsFromPEM(data)
-
-		caProvider = func() *x509.CertPool {
-			return pool
-		}
 	case TrustOnlyPemString:
-		pool := x509.NewCertPool()
+		pool = x509.NewCertPool()
 		pool.AppendCertsFromPEM([]byte(to.Pem))
-
-		caProvider = func() *x509.CertPool {
-			return pool
-		}
 	case TrustOnlyCertificates:
-		caProvider = func() *x509.CertPool {
-			return to.Certificates
-		}
+		pool = to.Certificates
 	}
 
 	if opts.DisableServerCertificateVerification != nil && *opts.DisableServerCertificateVerification {
-		caProvider = func() *x509.CertPool {
-			return nil
-		}
+		pool = nil
 	}
 
-	coreOpts := &gocbcore.ColumnarAgentConfig{
-		UserAgent:      Identifier(),
-		ConnectTimeout: opts.ConnectTimeout,
-		SeedConfig: gocbcore.ColumnarSeedConfig{
-			MemdAddrs: addresses,
-			SRVRecord: srvRecord,
-		},
-		SecurityConfig: gocbcore.ColumnarSecurityConfig{
-			TLSRootCAProvider: caProvider,
-			CipherSuite:       opts.CipherSuites,
-			Auth: gocbcore.PasswordAuthProvider{
-				Username: opts.Credential.UsernamePassword.Username,
-				Password: opts.Credential.UsernamePassword.Password,
-			},
-		},
-		ConfigPollerConfig: gocbcore.ColumnarConfigPollerConfig{
-			CccpMaxWait:    0,
-			CccpPollPeriod: 0,
-		},
-		KVConfig: gocbcore.ColumnarKVConfig{
-			ConnectTimeout:       opts.ConnectTimeout,
-			ServerWaitBackoff:    0,
-			ConnectionBufferSize: 0,
-		},
-		HTTPConfig: gocbcore.ColumnarHTTPConfig{
-			MaxIdleConns:          0,
-			MaxIdleConnsPerHost:   0,
-			MaxConnsPerHost:       0,
-			IdleConnectionTimeout: 1 * time.Second,
-		},
+	clientOpts := httpqueryclient.ClientConfig{
+		TLSConfig: createTlsConfig(opts.CipherSuites, pool, opts.Logger),
 	}
 
-	agent, err := gocbcore.CreateColumnarAgent(coreOpts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create agent: %s", err) // nolint: err113, errorlint
-	}
+	client := httpqueryclient.NewClient(addr, clientOpts)
 
-	return &gocbcoreClusterClient{
-		agent:              agent,
+	return &httpClusterClient{
+		client:             client,
 		serverQueryTimeout: opts.ServerQueryTimeout,
 		unmarshaler:        opts.Unmarshaler,
+		logger:             opts.Logger,
 	}, nil
 }
 
-func (c *gocbcoreClusterClient) Database(name string) databaseClient {
-	return newGocbcoreDatabaseClient(c.agent, name, c.serverQueryTimeout, c.unmarshaler)
+func (c *httpClusterClient) Database(name string) databaseClient {
+	return newHTTPDatabaseClient(httpDatabaseClientConfig{
+		Client:               c.client,
+		Name:                 name,
+		DefaultServerTimeout: c.serverQueryTimeout,
+		DefaultUnmarshaler:   c.unmarshaler,
+		Logger:               c.logger,
+	})
 }
 
-func (c *gocbcoreClusterClient) QueryClient() queryClient {
-	return newGocbcoreQueryClient(c.agent, c.serverQueryTimeout, c.unmarshaler, nil)
+func (c *httpClusterClient) QueryClient() queryClient {
+	return newHTTPQueryClient(httpQueryClientConfig{
+		Client:                    c.client,
+		DefaultServerQueryTimeout: c.serverQueryTimeout,
+		DefaultUnmarshaler:        c.unmarshaler,
+		Namespace:                 nil,
+		Logger:                    c.logger,
+	})
 }
 
-func (c *gocbcoreClusterClient) Close() error {
-	err := c.agent.Close()
+func (c *httpClusterClient) Close() error {
+	err := c.client.Close()
 	if err != nil {
-		return fmt.Errorf("failed to close agent: %s", err) // nolint: err113, errorlint
+		return fmt.Errorf("failed to close client: %s", err) // nolint: err113, errorlint
 	}
 
 	return nil
+}
+
+func createTlsConfig(cipherSuite []*tls.CipherSuite, pool *x509.CertPool, logger Logger) *tls.Config {
+	var suites []uint16
+
+	if cipherSuite != nil {
+		suites = make([]uint16, len(cipherSuite))
+		for i, suite := range cipherSuite {
+			var s uint16
+			for _, suiteID := range tls.CipherSuites() {
+				if suite.Name == suiteID.Name {
+					s = suiteID.ID
+					break
+				}
+			}
+			for _, suiteID := range tls.InsecureCipherSuites() {
+				if suite.Name == suiteID.Name {
+					s = suiteID.ID
+					break
+				}
+			}
+
+			if s > 0 {
+				suites[i] = s
+			} else {
+				logger.Warn("Unknown cipher suite %s, ignoring", suite.Name)
+			}
+		}
+	}
+
+	var insecureSkipVerify bool
+	if pool == nil {
+		insecureSkipVerify = true
+	}
+
+	return &tls.Config{
+		MinVersion:         tls.VersionTLS13,
+		CipherSuites:       suites,
+		RootCAs:            pool,
+		InsecureSkipVerify: insecureSkipVerify,
+	}
 }

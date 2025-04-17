@@ -1,4 +1,4 @@
-package cbcolumnar
+package ganalytics
 
 import (
 	"context"
@@ -10,49 +10,58 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/couchbase/gocbcore/v10"
+	"github.com/couchbase/ganalytics/internal/httpqueryclient"
 )
 
 type queryClient interface {
 	Query(ctx context.Context, statement string, opts *QueryOptions) (*QueryResult, error)
 }
 
-type gocbcoreQueryClientNamespace struct {
+type queryClientNamespace struct {
 	Database string
 	Scope    string
 }
-type gocbcoreQueryClient struct {
-	agent               *gocbcore.ColumnarAgent
-	defaultQueryTimeout time.Duration
-	defaultUnmarshaler  Unmarshaler
-	namespace           *gocbcoreQueryClientNamespace
+type httpQueryClient struct {
+	client                    *httpqueryclient.Client
+	defaultServerQueryTimeout time.Duration
+	defaultUnmarshaler        Unmarshaler
+	namespace                 *queryClientNamespace
+	logger                    Logger
 }
 
-func newGocbcoreQueryClient(agent *gocbcore.ColumnarAgent, defaultQueryTimeout time.Duration,
-	defaultUnmarshaler Unmarshaler, namespace *gocbcoreQueryClientNamespace) *gocbcoreQueryClient {
-	return &gocbcoreQueryClient{
-		agent:               agent,
-		defaultQueryTimeout: defaultQueryTimeout,
-		defaultUnmarshaler:  defaultUnmarshaler,
-		namespace:           namespace,
+type httpQueryClientConfig struct {
+	Client                    *httpqueryclient.Client
+	DefaultServerQueryTimeout time.Duration
+	DefaultUnmarshaler        Unmarshaler
+	Namespace                 *queryClientNamespace
+	Logger                    Logger
+}
+
+func newHTTPQueryClient(cfg httpQueryClientConfig) *httpQueryClient {
+	return &httpQueryClient{
+		client:                    cfg.Client,
+		defaultServerQueryTimeout: cfg.DefaultServerQueryTimeout,
+		defaultUnmarshaler:        cfg.DefaultUnmarshaler,
+		namespace:                 cfg.Namespace,
+		logger:                    cfg.Logger,
 	}
 }
 
-func (c *gocbcoreQueryClient) Query(ctx context.Context, statement string, opts *QueryOptions) (*QueryResult, error) {
-	coreOpts, err := c.translateQueryOptions(ctx, statement, opts)
+func (c *httpQueryClient) Query(ctx context.Context, statement string, opts *QueryOptions) (*QueryResult, error) {
+	clientOpts, err := c.translateQueryOptions(ctx, statement, opts)
 	if err != nil {
 		return nil, err
 	}
 
 	if c.namespace != nil {
-		coreOpts.Payload["query_context"] = fmt.Sprintf("default:`%s`.`%s`", c.namespace.Database, c.namespace.Scope)
+		clientOpts.Payload["query_context"] = fmt.Sprintf("default:`%s`.`%s`", c.namespace.Database, c.namespace.Scope)
 	}
 
-	coreOpts.Payload["client_context_id"] = uuid.NewString()
+	clientOpts.Payload["client_context_id"] = uuid.NewString()
 
-	res, err := c.agent.Query(ctx, *coreOpts)
+	res, err := c.client.Query(ctx, clientOpts)
 	if err != nil {
-		return nil, translateGocbcoreError(err)
+		return nil, translateClientError(err)
 	}
 
 	unmarshaler := opts.Unmarshaler
@@ -66,7 +75,7 @@ func (c *gocbcoreQueryClient) Query(ctx context.Context, statement string, opts 
 	}, nil
 }
 
-func (c *gocbcoreQueryClient) translateQueryOptions(ctx context.Context, statement string, opts *QueryOptions) (*gocbcore.ColumnarQueryOptions, error) {
+func (c *httpQueryClient) translateQueryOptions(ctx context.Context, statement string, opts *QueryOptions) (*httpqueryclient.QueryOptions, error) {
 	var priority *int
 
 	if opts.Priority != nil && *opts.Priority {
@@ -117,37 +126,35 @@ func (c *gocbcoreQueryClient) translateQueryOptions(ctx context.Context, stateme
 	if ok {
 		execOpts["timeout"] = (time.Until(deadline) + 5*time.Second).String()
 	} else {
-		execOpts["timeout"] = c.defaultQueryTimeout.String()
+		execOpts["timeout"] = c.defaultServerQueryTimeout.String()
 	}
 
 	execOpts["statement"] = statement
 
-	return &gocbcore.ColumnarQueryOptions{
-		Payload:      execOpts,
-		Priority:     priority,
-		User:         "",
-		TraceContext: nil,
+	return &httpqueryclient.QueryOptions{
+		Payload:  execOpts,
+		Priority: priority,
 	}, nil
 }
 
-type gocbcoreRowReader struct {
-	reader *gocbcore.ColumnarRowReader
+type clientRowReader struct {
+	reader *httpqueryclient.QueryRowReader
 }
 
-func (c *gocbcoreQueryClient) newRowReader(result *gocbcore.ColumnarRowReader) *gocbcoreRowReader {
-	return &gocbcoreRowReader{
+func (c *httpQueryClient) newRowReader(result *httpqueryclient.QueryRowReader) *clientRowReader {
+	return &clientRowReader{
 		reader: result,
 	}
 }
 
-func (c *gocbcoreRowReader) NextRow() []byte {
+func (c *clientRowReader) NextRow() []byte {
 	return c.reader.NextRow()
 }
 
-func (c *gocbcoreRowReader) MetaData() (*QueryMetadata, error) {
+func (c *clientRowReader) MetaData() (*QueryMetadata, error) {
 	metaBytes, err := c.reader.MetaData()
 	if err != nil {
-		return nil, translateGocbcoreError(err)
+		return nil, translateClientError(err)
 	}
 
 	var jsonResp jsonAnalyticsResponse
@@ -173,41 +180,42 @@ func (c *gocbcoreRowReader) MetaData() (*QueryMetadata, error) {
 	return meta, nil
 }
 
-func (c *gocbcoreRowReader) Close() error {
+func (c *clientRowReader) Close() error {
 	err := c.reader.Close()
 	if err != nil {
-		return translateGocbcoreError(err)
+		return translateClientError(err)
 	}
 
 	return nil
 }
 
-func (c *gocbcoreRowReader) Err() error {
+func (c *clientRowReader) Err() error {
 	err := c.reader.Err()
 	if err != nil {
-		return translateGocbcoreError(err)
+		return translateClientError(err)
 	}
 
 	return nil
 }
 
-func translateGocbcoreError(err error) error {
-	var coreErr *gocbcore.ColumnarError
-	if !errors.As(err, &coreErr) {
+func translateClientError(err error) error {
+	var clientErr *httpqueryclient.QueryError
+	if !errors.As(err, &clientErr) {
 		return err
 	}
 
-	if coreErr.HTTPResponseCode == 401 || errors.Is(err, gocbcore.ErrAuthenticationFailure) {
-		return newColumnarError(coreErr.Statement, coreErr.Endpoint, coreErr.HTTPResponseCode).
-			withMessage(coreErr.InnerError.Error()).
+	// TODO: Check for client auth failure, may not actually exist
+	if clientErr.HTTPResponseCode == 401 {
+		return newColumnarError(clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode).
+			withMessage(clientErr.InnerError.Error()).
 			withCause(ErrInvalidCredential)
 	}
 
-	if len(coreErr.Errors) > 0 {
+	if len(clientErr.Errors) > 0 {
 		var firstNonRetriableErr *columnarErrorDesc
 
-		descs := make([]columnarErrorDesc, len(coreErr.Errors))
-		for i, desc := range coreErr.Errors {
+		descs := make([]columnarErrorDesc, len(clientErr.Errors))
+		for i, desc := range clientErr.Errors {
 			descs[i] = columnarErrorDesc{
 				Code:    desc.Code,
 				Message: desc.Message,
@@ -223,61 +231,62 @@ func translateGocbcoreError(err error) error {
 		var msg string
 
 		if firstNonRetriableErr == nil {
-			code = int(coreErr.Errors[0].Code)
-			msg = coreErr.Errors[0].Message
+			code = int(clientErr.Errors[0].Code)
+			msg = clientErr.Errors[0].Message
 		} else {
 			code = int(firstNonRetriableErr.Code)
 			msg = firstNonRetriableErr.Message
 		}
 
 		if code == 20000 {
-			return newColumnarError(coreErr.Statement, coreErr.Endpoint, coreErr.HTTPResponseCode).
+			return newColumnarError(clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode).
 				withErrors(descs).
 				withCause(ErrInvalidCredential)
 		}
 
 		if code == 21002 {
-			return newColumnarError(coreErr.Statement, coreErr.Endpoint, coreErr.HTTPResponseCode).
+			return newColumnarError(clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode).
 				withErrors(descs).
 				withCause(ErrTimeout)
 		}
 
-		qErr := newQueryError(coreErr.Statement, coreErr.Endpoint, coreErr.HTTPResponseCode, code, msg).
+		qErr := newQueryError(clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode, code, msg).
 			withErrors(descs)
 
 		switch {
-		case errors.Is(coreErr.InnerError, gocbcore.ErrTimeout):
+		case errors.Is(clientErr.InnerError, httpqueryclient.ErrTimeout):
 			qErr.cause.cause = ErrTimeout
-		case errors.Is(coreErr.InnerError, context.Canceled):
+		case errors.Is(clientErr.InnerError, context.Canceled):
 			qErr.cause.cause = context.Canceled
-		case errors.Is(coreErr.InnerError, context.DeadlineExceeded):
+		case errors.Is(clientErr.InnerError, context.DeadlineExceeded):
 			qErr.cause.cause = context.DeadlineExceeded
 		}
 
 		return qErr
 	}
 
-	baseErr := newColumnarError(coreErr.Statement, coreErr.Endpoint, coreErr.HTTPResponseCode).
-		withMessage(coreErr.InnerError.Error())
+	baseErr := newColumnarError(clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode).
+		withMessage(clientErr.InnerError.Error())
 
 	switch {
-	case errors.Is(coreErr.InnerError, gocbcore.ErrTimeout):
+	case errors.Is(clientErr.InnerError, httpqueryclient.ErrTimeout):
 		baseErr.cause = ErrTimeout
-		if coreErr.WasNotDispatched {
+		if clientErr.WasNotDispatched {
 			baseErr.message = "operation not sent to server, as timeout would be exceeded"
 		}
-	case errors.Is(coreErr.InnerError, context.Canceled):
+	case errors.Is(clientErr.InnerError, context.Canceled):
 		baseErr.cause = context.Canceled
-		if coreErr.WasNotDispatched {
+		if clientErr.WasNotDispatched {
 			baseErr.message = "operation not sent to server, as context was cancelled"
 		}
-	case errors.Is(coreErr.InnerError, context.DeadlineExceeded):
+	case errors.Is(clientErr.InnerError, context.DeadlineExceeded):
 		baseErr.cause = context.DeadlineExceeded
-		if coreErr.WasNotDispatched {
+		if clientErr.WasNotDispatched {
 			baseErr.message = "operation not sent to server, as context deadline would be exceeded"
 		}
-	case errors.Is(coreErr.InnerError, gocbcore.ErrAuthenticationFailure):
-		baseErr.cause = ErrInvalidCredential
+		// TODO
+	// case errors.Is(clientErr.InnerError, gocbcore.ErrAuthenticationFailure):
+	// 	baseErr.cause = ErrInvalidCredential
 	default:
 		baseErr.cause = errors.New(err.Error()) // nolint: err113
 	}

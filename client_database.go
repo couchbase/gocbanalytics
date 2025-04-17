@@ -1,9 +1,8 @@
-package cbcolumnar
+package ganalytics
 
 import (
+	"github.com/couchbase/ganalytics/internal/httpqueryclient"
 	"time"
-
-	"github.com/couchbase/gocbcore/v10"
 )
 
 type databaseClient interface {
@@ -11,26 +10,43 @@ type databaseClient interface {
 	Scope(name string) scopeClient
 }
 
-type gocbcoreDatabaseClient struct {
-	agent                     *gocbcore.ColumnarAgent
+type httpDatabaseClient struct {
+	client                    *httpqueryclient.Client
 	name                      string
 	defaultServerQueryTimeout time.Duration
 	defaultUnmarshaler        Unmarshaler
+	logger                    Logger
 }
 
-func newGocbcoreDatabaseClient(agent *gocbcore.ColumnarAgent, name string, defaultServerQueryTimeout time.Duration, defaultUnmarshaler Unmarshaler) *gocbcoreDatabaseClient {
-	return &gocbcoreDatabaseClient{
-		agent:                     agent,
-		name:                      name,
-		defaultServerQueryTimeout: defaultServerQueryTimeout,
-		defaultUnmarshaler:        defaultUnmarshaler,
+type httpDatabaseClientConfig struct {
+	Client               *httpqueryclient.Client
+	Name                 string
+	DefaultServerTimeout time.Duration
+	DefaultUnmarshaler   Unmarshaler
+	Logger               Logger
+}
+
+func newHTTPDatabaseClient(cfg httpDatabaseClientConfig) *httpDatabaseClient {
+	return &httpDatabaseClient{
+		client:                    cfg.Client,
+		name:                      cfg.Name,
+		defaultServerQueryTimeout: cfg.DefaultServerTimeout,
+		defaultUnmarshaler:        cfg.DefaultUnmarshaler,
+		logger:                    cfg.Logger,
 	}
 }
 
-func (c *gocbcoreDatabaseClient) Name() string {
+func (c *httpDatabaseClient) Name() string {
 	return c.name
 }
 
-func (c *gocbcoreDatabaseClient) Scope(name string) scopeClient {
-	return newGocbcoreScopeClient(c.agent, name, c.name, c.defaultServerQueryTimeout, c.defaultUnmarshaler)
+func (c *httpDatabaseClient) Scope(name string) scopeClient {
+	return newHTTPScopeClient(httpScopeClientConfig{
+		Client:                    c.client,
+		DatabaseName:              c.name,
+		Name:                      name,
+		DefaultServerQueryTimeout: c.defaultServerQueryTimeout,
+		DefaultUnmarshaler:        c.defaultUnmarshaler,
+		Logger:                    c.logger,
+	})
 }

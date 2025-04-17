@@ -1,27 +1,27 @@
-package cbcolumnar_test
+package ganalytics_test
 
 import (
 	"testing"
 
-	cbcolumnar "github.com/couchbase/gocbcolumnar"
+	ganalytics "github.com/couchbase/ganalytics"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestInvalidCipherSuites(t *testing.T) {
-	opts := DefaultOptions().SetSecurityOptions(cbcolumnar.NewSecurityOptions().SetCipherSuites([]string{"bad"}))
-	_, err := cbcolumnar.NewCluster("couchbases://localhost", cbcolumnar.NewCredential("username", "password"), opts)
+	opts := DefaultOptions().SetSecurityOptions(ganalytics.NewSecurityOptions().SetCipherSuites([]string{"bad"}))
+	_, err := ganalytics.NewCluster("couchbases://localhost", ganalytics.NewCredential("username", "password"), opts)
 
-	assert.ErrorIs(t, err, cbcolumnar.ErrInvalidArgument)
+	assert.ErrorIs(t, err, ganalytics.ErrInvalidArgument)
 }
 
 func TestInvalidScheme(t *testing.T) {
-	_, err := cbcolumnar.NewCluster("couchbase://localhost", cbcolumnar.NewCredential("username", "password"), DefaultOptions())
+	_, err := ganalytics.NewCluster("couchbase://localhost", ganalytics.NewCredential("username", "password"), DefaultOptions())
 
-	assert.ErrorIs(t, err, cbcolumnar.ErrInvalidArgument)
+	assert.ErrorIs(t, err, ganalytics.ErrInvalidArgument)
 }
 
 func TestNoScheme(t *testing.T) {
-	_, err := cbcolumnar.NewCluster("//localhost", cbcolumnar.NewCredential("username", "password"), DefaultOptions())
+	_, err := ganalytics.NewCluster("//localhost", ganalytics.NewCredential("username", "password"), DefaultOptions())
 
-	assert.ErrorIs(t, err, cbcolumnar.ErrInvalidArgument)
+	assert.ErrorIs(t, err, ganalytics.ErrInvalidArgument)
 }

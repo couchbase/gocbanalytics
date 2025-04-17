@@ -16,7 +16,7 @@ func waitForNumGoroutines(expectedGoroutineCount int) int {
 	// likely have a leak.
 	goroutineCleanupPeriod := 1 * time.Second
 
-	// Loop for at most a second checking for goroutines leaks, this gives any HTTP goroutines time to shutdown
+	// Loop for at most a second checking for goroutines leaks, this gives any HTTP goroutines time to shut down.
 	var finalGoroutineCount int
 
 	start := time.Now()

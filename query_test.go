@@ -1,4 +1,4 @@
-package cbcolumnar_test
+package ganalytics_test
 
 import (
 	"context"
@@ -7,15 +7,15 @@ import (
 	"testing"
 	"time"
 
-	cbcolumnar "github.com/couchbase/gocbcolumnar"
+	ganalytics "github.com/couchbase/ganalytics"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestBasicQuery(t *testing.T) {
-	cluster, err := cbcolumnar.NewCluster(TestOpts.OriginalConnStr, cbcolumnar.NewCredential(TestOpts.Username, TestOpts.Password), DefaultOptions())
+	cluster, err := ganalytics.NewCluster(TestOpts.OriginalConnStr, ganalytics.NewCredential(TestOpts.Username, TestOpts.Password), DefaultOptions())
 	require.NoError(t, err)
-	defer func(cluster *cbcolumnar.Cluster) {
+	defer func(cluster *ganalytics.Cluster) {
 		err := cluster.Close()
 		assert.NoError(t, err)
 	}(cluster)
@@ -45,9 +45,9 @@ func TestBasicQuery(t *testing.T) {
 }
 
 func TestBasicBufferedQuery(t *testing.T) {
-	cluster, err := cbcolumnar.NewCluster(TestOpts.OriginalConnStr, cbcolumnar.NewCredential(TestOpts.Username, TestOpts.Password), DefaultOptions())
+	cluster, err := ganalytics.NewCluster(TestOpts.OriginalConnStr, ganalytics.NewCredential(TestOpts.Username, TestOpts.Password), DefaultOptions())
 	require.NoError(t, err)
-	defer func(cluster *cbcolumnar.Cluster) {
+	defer func(cluster *ganalytics.Cluster) {
 		err := cluster.Close()
 		assert.NoError(t, err)
 	}(cluster)
@@ -59,7 +59,7 @@ func TestBasicBufferedQuery(t *testing.T) {
 		res, err := queryable.ExecuteQuery(ctx, "FROM RANGE(0, 99) AS i SELECT RAW i")
 		require.NoError(tt, err)
 
-		actualRows, meta, err := cbcolumnar.BufferQueryResult[int](res)
+		actualRows, meta, err := ganalytics.BufferQueryResult[int](res)
 		require.NoError(tt, err)
 
 		for i := 0; i < 100; i++ {
@@ -75,10 +75,10 @@ func TestDispatchTimeout(t *testing.T) {
 	globalTestLogger.SuppressWarnings(true)
 	defer globalTestLogger.SuppressWarnings(false)
 
-	newCluster := func(tt *testing.T, dispatchTimeout time.Duration) *cbcolumnar.Cluster {
-		cluster, err := cbcolumnar.NewCluster("couchbases://somenonsense?srv=false",
-			cbcolumnar.NewCredential(TestOpts.Username, TestOpts.Password),
-			DefaultOptions().SetTimeoutOptions(cbcolumnar.NewTimeoutOptions().SetQueryTimeout(dispatchTimeout)),
+	newCluster := func(tt *testing.T, dispatchTimeout time.Duration) *ganalytics.Cluster {
+		cluster, err := ganalytics.NewCluster("couchbases://somenonsense?srv=false",
+			ganalytics.NewCredential(TestOpts.Username, TestOpts.Password),
+			DefaultOptions().SetTimeoutOptions(ganalytics.NewTimeoutOptions().SetQueryTimeout(dispatchTimeout)),
 		)
 		require.NoError(tt, err)
 
@@ -89,7 +89,7 @@ func TestDispatchTimeout(t *testing.T) {
 		_, err := queryable.ExecuteQuery(ctx, "SELECT sleep('foo', 5000);")
 		require.ErrorIs(tt, err, expectedErr)
 
-		var columnarErr *cbcolumnar.ColumnarError
+		var columnarErr *ganalytics.ColumnarError
 
 		require.ErrorAs(tt, err, &columnarErr)
 
@@ -98,7 +98,7 @@ func TestDispatchTimeout(t *testing.T) {
 
 	t.Run("Cluster Context Deadline", func(tt *testing.T) {
 		cluster := newCluster(tt, 2*time.Second)
-		defer func(cluster *cbcolumnar.Cluster) {
+		defer func(cluster *ganalytics.Cluster) {
 			err := cluster.Close()
 			assert.NoError(t, err)
 		}(cluster)
@@ -111,7 +111,7 @@ func TestDispatchTimeout(t *testing.T) {
 
 	t.Run("Scope Context Deadline", func(tt *testing.T) {
 		cluster := newCluster(tt, 2*time.Second)
-		defer func(cluster *cbcolumnar.Cluster) {
+		defer func(cluster *ganalytics.Cluster) {
 			err := cluster.Close()
 			assert.NoError(t, err)
 		}(cluster)
@@ -124,7 +124,7 @@ func TestDispatchTimeout(t *testing.T) {
 
 	t.Run("Cluster Context Cancel", func(tt *testing.T) {
 		cluster := newCluster(tt, 2*time.Second)
-		defer func(cluster *cbcolumnar.Cluster) {
+		defer func(cluster *ganalytics.Cluster) {
 			err := cluster.Close()
 			assert.NoError(t, err)
 		}(cluster)
@@ -137,7 +137,7 @@ func TestDispatchTimeout(t *testing.T) {
 
 	t.Run("Scope Context Cancel", func(tt *testing.T) {
 		cluster := newCluster(tt, 2*time.Second)
-		defer func(cluster *cbcolumnar.Cluster) {
+		defer func(cluster *ganalytics.Cluster) {
 			err := cluster.Close()
 			assert.NoError(t, err)
 		}(cluster)
@@ -150,32 +150,32 @@ func TestDispatchTimeout(t *testing.T) {
 
 	t.Run("Cluster Timeout", func(tt *testing.T) {
 		cluster := newCluster(tt, 1*time.Second)
-		defer func(cluster *cbcolumnar.Cluster) {
+		defer func(cluster *ganalytics.Cluster) {
 			err := cluster.Close()
 			assert.NoError(t, err)
 		}(cluster)
 
-		runTest(context.Background(), tt, cluster, cbcolumnar.ErrTimeout)
+		runTest(context.Background(), tt, cluster, ganalytics.ErrTimeout)
 	})
 
 	t.Run("Scope Timeout", func(tt *testing.T) {
 		cluster := newCluster(tt, 1*time.Second)
-		defer func(cluster *cbcolumnar.Cluster) {
+		defer func(cluster *ganalytics.Cluster) {
 			err := cluster.Close()
 			assert.NoError(t, err)
 		}(cluster)
 
-		runTest(context.Background(), tt, cluster.Database(TestOpts.Database).Scope(TestOpts.Scope), cbcolumnar.ErrTimeout)
+		runTest(context.Background(), tt, cluster.Database(TestOpts.Database).Scope(TestOpts.Scope), ganalytics.ErrTimeout)
 	})
 }
 
 func TestOperationTimeout(t *testing.T) {
-	cluster, err := cbcolumnar.NewCluster(TestOpts.OriginalConnStr,
-		cbcolumnar.NewCredential(TestOpts.Username, TestOpts.Password),
+	cluster, err := ganalytics.NewCluster(TestOpts.OriginalConnStr,
+		ganalytics.NewCredential(TestOpts.Username, TestOpts.Password),
 		DefaultOptions(),
 	)
 	require.NoError(t, err)
-	defer func(cluster *cbcolumnar.Cluster) {
+	defer func(cluster *ganalytics.Cluster) {
 		err := cluster.Close()
 		assert.NoError(t, err)
 	}(cluster)
@@ -188,7 +188,7 @@ func TestOperationTimeout(t *testing.T) {
 			_, err := queryable.ExecuteQuery(ctx, "SELECT sleep('foo', 5000);")
 			require.ErrorIs(ttt, err, context.DeadlineExceeded)
 
-			var columnarErr *cbcolumnar.ColumnarError
+			var columnarErr *ganalytics.ColumnarError
 
 			require.ErrorAs(ttt, err, &columnarErr)
 
@@ -207,7 +207,7 @@ func TestOperationTimeout(t *testing.T) {
 			_, err := queryable.ExecuteQuery(ctx, "SELECT sleep('foo', 5000);")
 			require.ErrorIs(ttt, err, context.Canceled)
 
-			var columnarErr *cbcolumnar.ColumnarError
+			var columnarErr *ganalytics.ColumnarError
 
 			require.ErrorAs(ttt, err, &columnarErr)
 
@@ -216,12 +216,12 @@ func TestOperationTimeout(t *testing.T) {
 	})
 
 	t.Run("Timeout", func(tt *testing.T) {
-		cluster, err := cbcolumnar.NewCluster(TestOpts.OriginalConnStr,
-			cbcolumnar.NewCredential(TestOpts.Username, TestOpts.Password),
-			DefaultOptions().SetTimeoutOptions(cbcolumnar.NewTimeoutOptions().SetQueryTimeout(1*time.Second)),
+		cluster, err := ganalytics.NewCluster(TestOpts.OriginalConnStr,
+			ganalytics.NewCredential(TestOpts.Username, TestOpts.Password),
+			DefaultOptions().SetTimeoutOptions(ganalytics.NewTimeoutOptions().SetQueryTimeout(1*time.Second)),
 		)
 		require.NoError(tt, err)
-		defer func(cluster *cbcolumnar.Cluster) {
+		defer func(cluster *ganalytics.Cluster) {
 			err := cluster.Close()
 			assert.NoError(tt, err)
 		}(cluster)
@@ -230,9 +230,9 @@ func TestOperationTimeout(t *testing.T) {
 			ctx := context.Background()
 
 			_, err := queryable.ExecuteQuery(ctx, "SELECT sleep('foo', 5000);")
-			require.ErrorIs(ttt, err, cbcolumnar.ErrTimeout)
+			require.ErrorIs(ttt, err, ganalytics.ErrTimeout)
 
-			var columnarErr *cbcolumnar.ColumnarError
+			var columnarErr *ganalytics.ColumnarError
 
 			require.ErrorAs(ttt, err, &columnarErr)
 
@@ -242,12 +242,12 @@ func TestOperationTimeout(t *testing.T) {
 }
 
 func TestQueryError(t *testing.T) {
-	cluster, err := cbcolumnar.NewCluster(TestOpts.OriginalConnStr,
-		cbcolumnar.NewCredential(TestOpts.Username, TestOpts.Password),
+	cluster, err := ganalytics.NewCluster(TestOpts.OriginalConnStr,
+		ganalytics.NewCredential(TestOpts.Username, TestOpts.Password),
 		DefaultOptions(),
 	)
 	require.NoError(t, err)
-	defer func(cluster *cbcolumnar.Cluster) {
+	defer func(cluster *ganalytics.Cluster) {
 		err := cluster.Close()
 		assert.NoError(t, err)
 	}(cluster)
@@ -257,13 +257,13 @@ func TestQueryError(t *testing.T) {
 		defer cancel()
 
 		_, err := queryable.ExecuteQuery(ctx, "SELEC 123;")
-		require.ErrorIs(tt, err, cbcolumnar.ErrQuery)
+		require.ErrorIs(tt, err, ganalytics.ErrQuery)
 
-		var columnarErr *cbcolumnar.ColumnarError
+		var columnarErr *ganalytics.ColumnarError
 
 		require.ErrorAs(tt, err, &columnarErr)
 
-		var queryErr *cbcolumnar.QueryError
+		var queryErr *ganalytics.QueryError
 
 		require.ErrorAs(tt, err, &queryErr)
 
@@ -277,12 +277,12 @@ func TestUnmarshaler(t *testing.T) {
 		Err: errors.New("something went wrong"), // nolint: err113
 	}
 
-	cluster, err := cbcolumnar.NewCluster(TestOpts.OriginalConnStr,
-		cbcolumnar.NewCredential(TestOpts.Username, TestOpts.Password),
+	cluster, err := ganalytics.NewCluster(TestOpts.OriginalConnStr,
+		ganalytics.NewCredential(TestOpts.Username, TestOpts.Password),
 		DefaultOptions().SetUnmarshaler(unmarshaler),
 	)
 	require.NoError(t, err)
-	defer func(cluster *cbcolumnar.Cluster) {
+	defer func(cluster *ganalytics.Cluster) {
 		err := cluster.Close()
 		assert.NoError(t, err)
 	}(cluster)
@@ -311,7 +311,7 @@ func (e *ErrorUnmarshaler) Unmarshal(_ []byte, _ interface{}) error {
 	return e.Err
 }
 
-func assertMeta(t *testing.T, meta *cbcolumnar.QueryMetadata, resultCount uint64) {
+func assertMeta(t *testing.T, meta *ganalytics.QueryMetadata, resultCount uint64) {
 	assert.Empty(t, meta.Warnings)
 	assert.NotEmpty(t, meta.RequestID)
 
@@ -323,7 +323,7 @@ func assertMeta(t *testing.T, meta *cbcolumnar.QueryMetadata, resultCount uint64
 }
 
 type Queryable interface {
-	ExecuteQuery(ctx context.Context, statement string, opts ...*cbcolumnar.QueryOptions) (*cbcolumnar.QueryResult, error)
+	ExecuteQuery(ctx context.Context, statement string, opts ...*ganalytics.QueryOptions) (*ganalytics.QueryResult, error)
 }
 
 func ExecuteQueryAgainst(t *testing.T, queryables []Queryable, fn func(tt *testing.T, queryable Queryable)) {
@@ -334,7 +334,7 @@ func ExecuteQueryAgainst(t *testing.T, queryables []Queryable, fn func(tt *testi
 	}
 }
 
-func CollectRows[T any](t *testing.T, res *cbcolumnar.QueryResult) []T {
+func CollectRows[T any](t *testing.T, res *ganalytics.QueryResult) []T {
 	var actualRows []T
 
 	for row := res.NextRow(); row != nil; row = res.NextRow() {

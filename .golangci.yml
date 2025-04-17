@@ -10,18 +10,16 @@ linters:
     - revive
     - wrapcheck
     - wsl
-linters-settings:
-  wrapcheck:
-    ignorePackageGlobs:
-      - github.com/couchbaselabs/gocbconnstr
-      - crypto/x509
-    ignoreInterfaceRegexps:
-      - "analyticsRowReader"
-      - "queryClient"
-      - "clusterClient"
-issues:
-  exclude-use-default: false
-
-  include:
-    - EXC0013
-    - EXC0014
+  settings:
+    wrapcheck:
+      ignore-package-globs:
+        - github.com/couchbaselabs/gocbconnstr
+        - crypto/x509
+      ignore-interface-regexps:
+        - "analyticsRowReader"
+        - "queryClient"
+        - "clusterClient"
+  exclusions:
+    presets:
+      - std-error-handling
+version: "2"

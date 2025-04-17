@@ -9,12 +9,17 @@ package leakcheck
 
 // EnableAll enables all leak checking.
 func EnableAll() {
+	EnableHTTPResponseTracking()
 	PrecheckGoroutines()
 }
 
 // ReportAll reports all leak checking.
 func ReportAll() bool {
 	testsPassed := true
+
+	if !ReportLeakedHTTPResponses() {
+		testsPassed = false
+	}
 
 	if !ReportLeakedGoroutines() {
 		testsPassed = false

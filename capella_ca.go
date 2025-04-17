@@ -1,4 +1,4 @@
-package cbcolumnar
+package ganalytics
 
 var capellaRootCA = []byte(`
 -----BEGIN CERTIFICATE-----

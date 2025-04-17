@@ -1,4 +1,4 @@
-package cbcolumnar
+package ganalytics
 
 // UserPassPair represents a username and password pair.
 type UserPassPair struct {
