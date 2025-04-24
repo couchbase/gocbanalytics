@@ -66,7 +66,7 @@ type InfoLogger struct {
 func NewInfoLogger() *InfoLogger {
 	return &InfoLogger{
 		baseLogger: baseLogger{
-			logger: logging.NewDefaultLogger(logging.LogInfo, 1),
+			logger: logging.NewDefaultLogger(logging.LogInfo, 0),
 		},
 	}
 }
@@ -80,7 +80,7 @@ type VerboseLogger struct {
 func NewVerboseLogger() *VerboseLogger {
 	return &VerboseLogger{
 		baseLogger: baseLogger{
-			logger: logging.NewDefaultLogger(logging.LogTrace, 1),
+			logger: logging.NewDefaultLogger(logging.LogTrace, 7),
 		},
 	}
 }
