@@ -47,7 +47,7 @@ type DefaultLogger struct {
 func NewDefaultLogger(level LogLevel, offset int) *DefaultLogger {
 	return &DefaultLogger{
 		Level:    level,
-		GoLogger: log.New(os.Stderr, "gocbanalytics ", log.Lmicroseconds|log.Lshortfile),
+		GoLogger: log.New(os.Stderr, "cbanalytics ", log.Lmicroseconds|log.Lshortfile),
 		Offset:   offset,
 	}
 }
@@ -79,7 +79,7 @@ func (l *DefaultLogger) Log(level LogLevel, format string, v ...interface{}) {
 
 	s := fmt.Sprintf(format, v...)
 
-	err := l.GoLogger.Output(l.Offset+2, s)
+	err := l.GoLogger.Output(5, s)
 	if err != nil {
 		log.Printf("Logger error occurred (%s)\n", err)
 	}

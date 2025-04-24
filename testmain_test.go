@@ -72,7 +72,7 @@ func TestMain(m *testing.M) {
 
 		var preLogTotal uint64
 
-		for i := 0; i < int(cbanalytics.LogTrace); i++ {
+		for i := 0; i < int(cbanalytics.LogTrace+1); i++ {
 			count := atomic.LoadUint64(&globalTestLogger.LogCount[i])
 			preLogTotal += count
 			log.Printf("  (%s): %d", logLevelToString(cbanalytics.LogLevel(i)), count)
@@ -91,7 +91,7 @@ func TestMain(m *testing.M) {
 
 		var postLogTotal uint64
 
-		for i := 0; i < int(cbanalytics.LogTrace); i++ {
+		for i := 0; i < int(cbanalytics.LogTrace+1); i++ {
 			count := atomic.LoadUint64(&globalTestLogger.LogCount[i])
 			postLogTotal += count
 			log.Printf("  (%s): %d", logLevelToString(cbanalytics.LogLevel(i)), count)
@@ -175,29 +175,41 @@ type testLogger struct {
 }
 
 func (logger *testLogger) Error(format string, v ...interface{}) {
-	logger.Parent.Error(format, v...)
+	atomic.AddUint64(&logger.LogCount[cbanalytics.LogError], 1)
+
+	logger.Parent.Error(fmt.Sprintf("[error] %s", format), v...)
 }
 
 func (logger *testLogger) Warn(format string, v ...interface{}) {
 	if atomic.LoadUint32(&logger.suppressWarnings) == 1 || strings.Contains(format, "server certificate verification is disabled") {
-		logger.Parent.Info(format, v...)
+		atomic.AddUint64(&logger.LogCount[cbanalytics.LogInfo], 1)
+
+		logger.Parent.Info(fmt.Sprintf("[info] %s", format), v...)
 
 		return
 	}
 
-	logger.Parent.Warn(format, v...)
+	atomic.AddUint64(&logger.LogCount[cbanalytics.LogWarn], 1)
+
+	logger.Parent.Warn(fmt.Sprintf("[warn] %s", format), v...)
 }
 
 func (logger *testLogger) Info(format string, v ...interface{}) {
-	logger.Parent.Info(format, v...)
+	atomic.AddUint64(&logger.LogCount[cbanalytics.LogInfo], 1)
+
+	logger.Parent.Info(fmt.Sprintf("[info] %s", format), v...)
 }
 
 func (logger *testLogger) Debug(format string, v ...interface{}) {
-	logger.Parent.Debug(format, v...)
+	atomic.AddUint64(&logger.LogCount[cbanalytics.LogDebug], 1)
+
+	logger.Parent.Debug(fmt.Sprintf("[debug] %s", format), v...)
 }
 
 func (logger *testLogger) Trace(format string, v ...interface{}) {
-	logger.Parent.Trace(format, v...)
+	atomic.AddUint64(&logger.LogCount[cbanalytics.LogTrace], 1)
+
+	logger.Parent.Trace(fmt.Sprintf("[trace] %s", format), v...)
 }
 
 func (logger *testLogger) SuppressWarnings(suppress bool) {
@@ -211,7 +223,7 @@ func (logger *testLogger) SuppressWarnings(suppress bool) {
 func createTestLogger() *testLogger {
 	return &testLogger{
 		Parent:           cbanalytics.NewVerboseLogger(),
-		LogCount:         make([]uint64, cbanalytics.LogTrace),
+		LogCount:         make([]uint64, cbanalytics.LogTrace+1),
 		suppressWarnings: 0,
 	}
 }
