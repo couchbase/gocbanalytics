@@ -22,7 +22,8 @@ var (
 	// ErrTimeout occurs when an operation does not receive a response in a timely manner.
 	ErrTimeout = errors.New("operation has timed out")
 
-	// TODO: Auth error?
+	// ErrInvalidCredential occurs when an invalid set of credentials is provided for a service.
+	ErrInvalidCredential = errors.New("an invalid set of credentials was provided")
 )
 
 // ErrorDesc represents specific Columnar error data.
