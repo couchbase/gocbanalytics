@@ -173,6 +173,30 @@ func TestQueryError(t *testing.T) {
 	})
 }
 
+func TestInvalidCredential(t *testing.T) {
+	cluster, err := cbanalytics.NewCluster(TestOpts.OriginalConnStr,
+		cbanalytics.NewBasicAuthCredential(TestOpts.Username, "prettyunlikelytobeapassword!"),
+		DefaultOptions(),
+	)
+	require.NoError(t, err)
+	defer func(cluster *cbanalytics.Cluster) {
+		err := cluster.Close()
+		assert.NoError(t, err)
+	}(cluster)
+
+	ExecuteQueryAgainst(t, []Queryable{cluster, cluster.Database(TestOpts.Database).Scope(TestOpts.Scope)}, func(tt *testing.T, queryable Queryable) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		_, err := queryable.ExecuteQuery(ctx, "SELECT 123;")
+		require.ErrorIs(tt, err, cbanalytics.ErrInvalidCredential)
+
+		var columnarErr *cbanalytics.ColumnarError
+
+		require.ErrorAs(tt, err, &columnarErr)
+	})
+}
+
 func TestUnmarshaler(t *testing.T) {
 	unmarshaler := &ErrorUnmarshaler{
 		Err: errors.New("something went wrong"), // nolint: err113

@@ -235,6 +235,10 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 func parseColumnarErrorResponse(respBody []byte, statement, endpoint string, statusCode int, lastCode uint32, lastMsg string) *QueryError {
 	var rawRespParse jsonAnalyticsErrorResponse
 
+	if statusCode == 401 {
+		return newColumnarError(ErrInvalidCredential, statement, endpoint, statusCode)
+	}
+
 	parseErr := json.Unmarshal(respBody, &rawRespParse)
 	if parseErr != nil {
 		return newColumnarError(newObfuscateErrorWrapper("failed to parse response errors", parseErr), statement, endpoint, statusCode).
@@ -269,8 +273,12 @@ func parseColumnarErrorResponse(respBody []byte, statement, endpoint string, sta
 			Retry:   jsonErr.Retry,
 		}
 
-		if innerErr == nil && jsonErr.Code == 21002 {
-			innerErr = ErrTimeout
+		if innerErr == nil {
+			if jsonErr.Code == 21002 {
+				innerErr = ErrTimeout
+			} else if jsonErr.Code == 20000 {
+				innerErr = ErrInvalidCredential
+			}
 		}
 	}
 
@@ -285,6 +293,11 @@ func parseColumnarErrorResponse(respBody []byte, statement, endpoint string, sta
 }
 
 func isColumnarErrorRetriable(cErr *QueryError) (*ErrorDesc, bool) {
+	// If there are no errors then we shouldn't retry.
+	if len(cErr.Errors) == 0 {
+		return nil, false
+	}
+
 	var first *ErrorDesc
 
 	allRetriable := true
