@@ -39,7 +39,7 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 
 	ctxDeadline, _ := ctx.Deadline()
 
-	var serverTimeout time.Duration
+	var serverDeadline time.Time
 
 	st, ok := opts.Payload["timeout"]
 	if ok {
@@ -48,7 +48,7 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 			return nil, newObfuscateErrorWrapper("failed to parse server timeout", err)
 		}
 
-		serverTimeout = timeout
+		serverDeadline = time.Now().Add(timeout)
 	}
 
 	var lastCode uint32
@@ -99,7 +99,7 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 				return nil, newColumnarError(err, statement, c.host, 0)
 			}
 
-			newBody, err := handleMaybeRetryColumnar(ctxDeadline, serverTimeout, backoff, retries, opts.Payload)
+			newBody, err := handleMaybeRetryColumnar(ctxDeadline, serverDeadline, backoff, retries, opts.Payload)
 			if err != nil {
 				return nil, newColumnarError(err, statement, c.host, 0).withLastDetail(lastCode, lastMessage)
 			}
@@ -137,7 +137,7 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 					lastMessage = first.Message
 				}
 
-				newBody, err := handleMaybeRetryColumnar(ctxDeadline, serverTimeout, backoff, retries, opts.Payload)
+				newBody, err := handleMaybeRetryColumnar(ctxDeadline, serverDeadline, backoff, retries, opts.Payload)
 				if err != nil {
 					return nil, newColumnarError(err, statement, c.host, resp.StatusCode).
 						withErrors(cErr.Errors).
@@ -207,7 +207,7 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 					lastMessage = first.Message
 				}
 
-				newBody, err := handleMaybeRetryColumnar(ctxDeadline, serverTimeout, backoff, retries, opts.Payload)
+				newBody, err := handleMaybeRetryColumnar(ctxDeadline, serverDeadline, backoff, retries, opts.Payload)
 				if err != nil {
 					return nil, newColumnarError(err, statement, c.host, resp.StatusCode).
 						withErrors(cErr.Errors).
@@ -328,7 +328,7 @@ func isColumnarErrorRetriable(cErr *QueryError) (*ErrorDesc, bool) {
 }
 
 // Note in the interest of keeping this signature sane, we return a raw base error here.
-func handleMaybeRetryColumnar(ctxDeadline time.Time, serverTimeout time.Duration, calc backoffCalculator,
+func handleMaybeRetryColumnar(ctxDeadline time.Time, serverDeadline time.Time, calc backoffCalculator,
 	retries uint32, payload map[string]interface{}) ([]byte, error) {
 	b := calc(retries)
 
@@ -340,12 +340,13 @@ func handleMaybeRetryColumnar(ctxDeadline time.Time, serverTimeout time.Duration
 		}
 	}
 
-	if serverTimeout > 0 {
-		if time.Now().Add(b).After(time.Now().Add(serverTimeout)) {
+	if !serverDeadline.IsZero() {
+		serverTimeout := serverDeadline.Sub(time.Now().Add(b))
+
+		if serverTimeout < 0 {
 			return nil, ErrTimeout
 		}
 
-		serverTimeout -= b
 		payload["timeout"] = serverTimeout.String()
 
 		payloadBody, err := json.Marshal(payload)
