@@ -55,21 +55,35 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 
 	var lastMessage string
 
+	var lastRootErr error
+
 	var retries uint32
 
 	uniqueID := uuid.NewString()
 
 	backoff := columnarExponentialBackoffWithJitter(100*time.Millisecond, 1*time.Minute, 2)
 
+	addrs, err := c.resolver.LookupHost(ctx, c.host)
+	if err != nil {
+		return nil, fmt.Errorf("failed to lookup host: %w", err)
+	}
+
 	for {
-		reqURI := fmt.Sprintf("%s://%s/api/v1/request", c.scheme, c.endpoint)
+		if len(addrs) == 0 {
+			return nil, newColumnarError(lastRootErr, statement, c.host, 0).withLastDetail(lastCode, lastMessage)
+		}
+
+		idx := rand.Intn(len(addrs))
+		addr := addrs[idx]
+
+		reqURI := fmt.Sprintf("%s://%s:%d/api/v1/request", c.scheme, addr, c.port)
 
 		req, err := http.NewRequestWithContext(ctx, "POST", reqURI, io.NopCloser(bytes.NewReader(body)))
 		if err != nil {
 			return nil, newObfuscateErrorWrapper("failed to create http request", err)
 		}
 
-		req.Host = c.endpoint
+		req.Host = c.host
 		req.Header = header
 
 		username, password := opts.CredentialProvider()
@@ -82,13 +96,16 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 			c.logger.Trace("Received HTTP Response for ID=%s, errored: %v", uniqueID, err)
 
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				return nil, newColumnarError(err, statement, c.endpoint, 0)
+				return nil, newColumnarError(err, statement, c.host, 0)
 			}
 
 			newBody, err := handleMaybeRetryColumnar(ctxDeadline, serverTimeout, backoff, retries, opts.Payload)
 			if err != nil {
-				return nil, newColumnarError(err, statement, c.endpoint, 0).withLastDetail(lastCode, lastMessage)
+				return nil, newColumnarError(err, statement, c.host, 0).withLastDetail(lastCode, lastMessage)
 			}
+
+			addrs = append(addrs[:idx], addrs[idx+1:]...)
+			lastRootErr = err
 
 			body = newBody
 			retries++
@@ -103,15 +120,17 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 			respBody, readErr := io.ReadAll(resp.Body)
 			if readErr != nil {
 				return nil, newColumnarError(newObfuscateErrorWrapper("failed to read response body", readErr), statement,
-					c.endpoint, resp.StatusCode)
+					c.host, resp.StatusCode)
 			}
 
-			cErr := parseColumnarErrorResponse(respBody, statement, c.endpoint, resp.StatusCode, lastCode, lastMessage)
+			cErr := parseColumnarErrorResponse(respBody, statement, c.host, resp.StatusCode, lastCode, lastMessage)
 			if cErr != nil {
 				first, retriable := isColumnarErrorRetriable(cErr)
 				if !retriable {
 					return nil, cErr
 				}
+
+				lastRootErr = cErr
 
 				if first != nil {
 					lastCode = first.Code
@@ -120,7 +139,7 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 
 				newBody, err := handleMaybeRetryColumnar(ctxDeadline, serverTimeout, backoff, retries, opts.Payload)
 				if err != nil {
-					return nil, newColumnarError(err, statement, c.endpoint, resp.StatusCode).
+					return nil, newColumnarError(err, statement, c.host, resp.StatusCode).
 						withErrors(cErr.Errors).
 						withErrorText(string(respBody)).
 						withLastDetail(lastCode, lastMessage)
@@ -135,7 +154,7 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 			return nil, newColumnarError(
 				errors.New("query returned non-200 status code but no errors in body"), //nolint:err113
 				statement,
-				c.endpoint,
+				c.host,
 				resp.StatusCode).
 				withErrorText(string(respBody)).
 				withLastDetail(lastCode, lastMessage)
@@ -150,7 +169,7 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 
 			return nil, newColumnarError(newObfuscateErrorWrapper("failed to parse success response body", readErr),
 				statement,
-				c.endpoint,
+				c.host,
 				resp.StatusCode).
 				withErrorText(string(respBody)).
 				withLastDetail(lastCode, lastMessage)
@@ -162,7 +181,7 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 			if err != nil {
 				return nil, newColumnarError(err,
 					statement,
-					c.endpoint,
+					c.host,
 					resp.StatusCode)
 			}
 
@@ -170,16 +189,18 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 			if metaErr != nil {
 				return nil, newColumnarError(metaErr,
 					statement,
-					c.endpoint,
+					c.host,
 					resp.StatusCode)
 			}
 
-			cErr := parseColumnarErrorResponse(meta, statement, c.endpoint, resp.StatusCode, lastCode, lastMessage)
+			cErr := parseColumnarErrorResponse(meta, statement, c.host, resp.StatusCode, lastCode, lastMessage)
 			if cErr != nil {
 				first, retriable := isColumnarErrorRetriable(cErr)
 				if !retriable {
 					return nil, cErr
 				}
+
+				lastRootErr = cErr
 
 				if first != nil {
 					lastCode = first.Code
@@ -188,7 +209,7 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 
 				newBody, err := handleMaybeRetryColumnar(ctxDeadline, serverTimeout, backoff, retries, opts.Payload)
 				if err != nil {
-					return nil, newColumnarError(err, statement, c.endpoint, resp.StatusCode).
+					return nil, newColumnarError(err, statement, c.host, resp.StatusCode).
 						withErrors(cErr.Errors).
 						withErrorText(string(meta)).
 						withLastDetail(lastCode, lastMessage)
@@ -204,7 +225,7 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 		return &QueryRowReader{
 			streamer:   streamer,
 			statement:  statement,
-			endpoint:   c.endpoint,
+			endpoint:   c.host,
 			statusCode: resp.StatusCode,
 			peeked:     peeked,
 		}, nil
@@ -238,6 +259,8 @@ func parseColumnarErrorResponse(respBody []byte, statement, endpoint string, sta
 		return nil
 	}
 
+	var innerErr error
+
 	errDescs := make([]ErrorDesc, len(respParse))
 	for i, jsonErr := range respParse {
 		errDescs[i] = ErrorDesc{
@@ -245,9 +268,17 @@ func parseColumnarErrorResponse(respBody []byte, statement, endpoint string, sta
 			Message: jsonErr.Msg,
 			Retry:   jsonErr.Retry,
 		}
+
+		if innerErr == nil && jsonErr.Code == 21002 {
+			innerErr = ErrTimeout
+		}
 	}
 
-	return newColumnarError(ErrColumnar, statement, endpoint, statusCode).
+	if innerErr == nil {
+		innerErr = ErrColumnar
+	}
+
+	return newColumnarError(innerErr, statement, endpoint, statusCode).
 		withLastDetail(lastCode, lastMsg).
 		withErrorText(string(respBody)).
 		withErrors(errDescs)
@@ -306,7 +337,7 @@ func handleMaybeRetryColumnar(ctxDeadline time.Time, serverTimeout time.Duration
 
 		payloadBody, err := json.Marshal(payload)
 		if err != nil {
-			return nil, err //nolint:wrapcheck
+			return nil, newObfuscateErrorWrapper("failed to marshal payload after updating timeout", err)
 		}
 
 		body = payloadBody

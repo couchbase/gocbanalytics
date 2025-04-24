@@ -49,8 +49,6 @@ type httpClusterClient struct {
 }
 
 func newHTTPClusterClient(opts clusterClientOptions) (*httpClusterClient, error) {
-	addr := fmt.Sprintf("%s:%d", opts.Address.Host, opts.Address.Port)
-
 	trustOnly := opts.TrustOnly
 	if trustOnly == nil {
 		trustOnly = trustCapellaAndSystem{}
@@ -100,7 +98,7 @@ func newHTTPClusterClient(opts clusterClientOptions) (*httpClusterClient, error)
 		Logger:    opts.Logger,
 	}
 
-	client := httpqueryclient.NewClient(opts.Scheme, addr, clientOpts)
+	client := httpqueryclient.NewClient(opts.Scheme, opts.Address.Host, opts.Address.Port, clientOpts)
 
 	return &httpClusterClient{
 		credential:         opts.Credential,

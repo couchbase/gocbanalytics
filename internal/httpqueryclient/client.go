@@ -21,17 +21,23 @@ type ClientConfig struct {
 // Client represents an HTTP client that can be used to make requests to the server.
 type Client struct {
 	scheme      string
-	endpoint    string
+	host        string
+	port        int
 	innerClient *http.Client
+	resolver    *net.Resolver
 	logger      logging.Logger
 }
 
 // NewClient creates a new Client with the given endpoint and configuration.
-func NewClient(scheme string, endpoint string, config ClientConfig) *Client {
+func NewClient(scheme string, host string, port int, config ClientConfig) *Client {
+	client, resolver := createHTTPClient(config.TLSConfig)
+
 	return &Client{
 		scheme:      scheme,
-		endpoint:    endpoint,
-		innerClient: createHTTPClient(config.TLSConfig),
+		host:        host,
+		port:        port,
+		innerClient: client,
+		resolver:    resolver,
 		logger:      config.Logger,
 	}
 }
@@ -45,10 +51,13 @@ func (c *Client) Close() error {
 	return nil
 }
 
-func createHTTPClient(tlsConfig *tls.Config) *http.Client {
+func createHTTPClient(tlsConfig *tls.Config) (*http.Client, *net.Resolver) {
+	resolver := net.DefaultResolver
+
 	httpDialer := &net.Dialer{ //nolint:exhaustruct
 		Timeout:   10 * time.Second,
 		KeepAlive: 30 * time.Second,
+		Resolver:  resolver,
 	}
 
 	// We set ForceAttemptHTTP2, which will update the base-config to support HTTP2
@@ -87,5 +96,5 @@ func createHTTPClient(tlsConfig *tls.Config) *http.Client {
 		},
 	}
 
-	return httpCli
+	return httpCli, resolver
 }
