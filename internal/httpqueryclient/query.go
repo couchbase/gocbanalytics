@@ -10,6 +10,7 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
+	"net/http/httptrace"
 	"time"
 
 	"github.com/google/uuid"
@@ -78,7 +79,15 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 
 		reqURI := fmt.Sprintf("%s://%s:%d/api/v1/request", c.scheme, addr, c.port)
 
-		req, err := http.NewRequestWithContext(ctx, "POST", reqURI, io.NopCloser(bytes.NewReader(body)))
+		var connectDoneErr error
+
+		trace := &httptrace.ClientTrace{ //nolint:exhaustruct
+			ConnectDone: func(_, _ string, err error) {
+				connectDoneErr = err
+			},
+		}
+
+		req, err := http.NewRequestWithContext(httptrace.WithClientTrace(ctx, trace), "POST", reqURI, io.NopCloser(bytes.NewReader(body)))
 		if err != nil {
 			return nil, newObfuscateErrorWrapper("failed to create http request", err)
 		}
@@ -95,8 +104,11 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 		if err != nil {
 			c.logger.Trace("Received HTTP Response for ID=%s, errored: %v", uniqueID, err)
 
-			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-				return nil, newColumnarError(err, statement, c.host, 0)
+			// We don't want to bail out on connection errors as they may be because of dial timeout.
+			if connectDoneErr == nil {
+				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+					return nil, newColumnarError(err, statement, c.host, 0)
+				}
 			}
 
 			newBody, err := handleMaybeRetryColumnar(ctxDeadline, serverDeadline, backoff, retries, opts.Payload)
@@ -105,7 +117,7 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 			}
 
 			addrs = append(addrs[:idx], addrs[idx+1:]...)
-			lastRootErr = err
+			lastRootErr = newObfuscateErrorWrapper("failed to send request", err)
 
 			body = newBody
 			retries++
