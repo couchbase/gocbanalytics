@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"io"
 	"math"
 	"math/rand"
@@ -55,6 +56,8 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 
 	var retries uint32
 
+	uniqueID := uuid.NewString()
+
 	backoff := columnarExponentialBackoffWithJitter(100*time.Millisecond, 1*time.Minute, 2)
 
 	for {
@@ -65,13 +68,18 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 			return nil, newObfuscateErrorWrapper("failed to create http request", err)
 		}
 
+		req.Host = c.endpoint
 		req.Header = header
 
 		username, password := opts.CredentialProvider()
 		req.SetBasicAuth(username, password)
 
+		c.logger.Trace("Sending request %s to %s", uniqueID, reqURI)
+
 		resp, err := c.innerClient.Do(req)
 		if err != nil {
+			c.logger.Trace("Received HTTP Response for ID=%s, errored: %v", uniqueID, err)
+
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return nil, newColumnarError(err, statement, c.endpoint, 0)
 			}
@@ -86,6 +94,8 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 
 			continue
 		}
+
+		c.logger.Trace("Received HTTP Response for ID=%s, status=%d", uniqueID, resp.StatusCode)
 
 		resp = leakcheck.WrapHTTPResponse(resp) // nolint: bodyclose
 		if resp.StatusCode != 200 {
