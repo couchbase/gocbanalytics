@@ -6,12 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
 	"io"
 	"math"
 	"math/rand"
 	"net/http"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/couchbase/gocbanalytics/internal/leakcheck"
 )
