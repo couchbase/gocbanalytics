@@ -1,12 +1,14 @@
-# Couchbase Go Columnar Client
+# Couchbase Go Analytics Client
 
-Go client for [Couchbase](https://couchbase.com) Columnar
+Go client for [Couchbase](https://couchbase.com) Analytics.
+
+#### This client is currently in **developer preview** state and is not recommended for production use.
 
 ## Useful Links
 ### Documentation
-You can explore our API reference through godoc at [https://pkg.go.dev/github.com/couchbase/cbanalytics](https://pkg.go.dev/github.com/couchbase/cbanalytics).
+You can explore our API reference through godoc at [https://pkg.go.dev/github.com/couchbase/gocbanalytics](https://pkg.go.dev/github.com/couchbase/gocbanalytics).
 
-You can also find documentation for the Go Columnar SDK on the [official Couchbase docs](https://docs.couchbase.com/go-columnar-sdk/current/hello-world/overview.html).
+[//]: # (You can also find documentation for the Go Columnar SDK on the [official Couchbase docs]&#40;https://docs.couchbase.com/go-columnar-sdk/current/hello-world/overview.html&#41;.)
 
 ## Installing
 
