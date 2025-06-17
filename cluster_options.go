@@ -55,11 +55,6 @@ type SecurityOptions struct {
 	// DisableServerCertificateVerification when specified causes the SDK to trust ANY certificate
 	// regardless of validity.
 	DisableServerCertificateVerification *bool
-
-	// CipherSuites specifies the TLS cipher suites the SDK is allowed to use when negotiating TLS
-	// settings, or an empty list to use any cipher suite supported by the runtime environment.
-	// See: https://go.dev/src/crypto/tls/cipher_suites.go
-	CipherSuites []string
 }
 
 // NewSecurityOptions creates a new instance of SecurityOptions.
@@ -67,7 +62,6 @@ func NewSecurityOptions() *SecurityOptions {
 	return &SecurityOptions{
 		TrustOnly:                            TrustOnlyCapella{},
 		DisableServerCertificateVerification: nil,
-		CipherSuites:                         nil,
 	}
 }
 
@@ -81,13 +75,6 @@ func (opts *SecurityOptions) SetTrustOnly(trustOnly TrustOnly) *SecurityOptions 
 // SetDisableServerCertificateVerification sets the DisableServerCertificateVerification field in SecurityOptions.
 func (opts *SecurityOptions) SetDisableServerCertificateVerification(disabled bool) *SecurityOptions {
 	opts.DisableServerCertificateVerification = &disabled
-
-	return opts
-}
-
-// SetCipherSuites sets the CipherSuites field in SecurityOptions.
-func (opts *SecurityOptions) SetCipherSuites(cipherSuites []string) *SecurityOptions {
-	opts.CipherSuites = cipherSuites
 
 	return opts
 }
@@ -152,7 +139,6 @@ func NewClusterOptions() *ClusterOptions {
 		SecurityOptions: &SecurityOptions{
 			TrustOnly:                            TrustOnlyCapella{},
 			DisableServerCertificateVerification: nil,
-			CipherSuites:                         nil,
 		},
 		Unmarshaler: nil,
 		Logger:      nil,
@@ -222,7 +208,6 @@ func mergeClusterOptions(opts ...*ClusterOptions) *ClusterOptions {
 				clusterOpts.SecurityOptions = &SecurityOptions{
 					TrustOnly:                            nil,
 					DisableServerCertificateVerification: nil,
-					CipherSuites:                         nil,
 				}
 			}
 
@@ -232,10 +217,6 @@ func mergeClusterOptions(opts ...*ClusterOptions) *ClusterOptions {
 
 			if opt.SecurityOptions.DisableServerCertificateVerification != nil {
 				clusterOpts.SecurityOptions.DisableServerCertificateVerification = opt.SecurityOptions.DisableServerCertificateVerification
-			}
-
-			if len(opt.SecurityOptions.CipherSuites) > 0 {
-				clusterOpts.SecurityOptions.CipherSuites = opt.SecurityOptions.CipherSuites
 			}
 		}
 

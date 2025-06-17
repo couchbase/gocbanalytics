@@ -1,11 +1,8 @@
 package cbanalytics
 
 import (
-	"crypto/tls"
-	"fmt"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 )
 
@@ -148,45 +145,6 @@ func NewCluster(httpEndpoint string, credential Credential, opts ...*ClusterOpti
 		securityOpts.DisableServerCertificateVerification = &val
 	}
 
-	if valStr, ok := fetchOption("security.cipher_suites"); ok {
-		split := strings.Split(valStr, ",")
-
-		securityOpts.CipherSuites = split
-	}
-
-	cipherSuites := make([]*tls.CipherSuite, len(securityOpts.CipherSuites))
-
-	for i, suite := range securityOpts.CipherSuites {
-		var s *tls.CipherSuite
-
-		for _, supportedSuite := range tls.CipherSuites() {
-			if supportedSuite.Name == suite {
-				s = supportedSuite
-
-				break
-			}
-		}
-
-		for _, unsupportedSuite := range tls.InsecureCipherSuites() {
-			if unsupportedSuite.Name == suite {
-				logger.Warn("cipher suite %s is insecure, it is not recommended to use this", suite)
-
-				s = unsupportedSuite
-
-				break
-			}
-		}
-
-		if s == nil {
-			return nil, invalidArgumentError{
-				ArgumentName: "CipherSuites",
-				Reason:       fmt.Sprintf("unsupported cipher suite %s", suite),
-			}
-		}
-
-		cipherSuites[i] = s
-	}
-
 	if connectTimeout == 0 {
 		return nil, invalidArgumentError{
 			ArgumentName: "ConnectTimeout",
@@ -217,7 +175,6 @@ func NewCluster(httpEndpoint string, credential Credential, opts ...*ClusterOpti
 		ServerQueryTimeout:                   queryTimeout,
 		TrustOnly:                            securityOpts.TrustOnly,
 		DisableServerCertificateVerification: securityOpts.DisableServerCertificateVerification,
-		CipherSuites:                         cipherSuites,
 		Address:                              addr,
 		Unmarshaler:                          unmarshaler,
 		Logger:                               logger,

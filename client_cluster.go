@@ -29,7 +29,6 @@ type clusterClientOptions struct {
 	ServerQueryTimeout                   time.Duration
 	TrustOnly                            TrustOnly
 	DisableServerCertificateVerification *bool
-	CipherSuites                         []*tls.CipherSuite
 	Address                              address
 	Unmarshaler                          Unmarshaler
 	Logger                               Logger
@@ -94,7 +93,7 @@ func newHTTPClusterClient(opts clusterClientOptions) (*httpClusterClient, error)
 	}
 
 	clientOpts := httpqueryclient.ClientConfig{
-		TLSConfig: createTLSConfig(opts.Address.Host, opts.CipherSuites, pool, opts.Logger),
+		TLSConfig: createTLSConfig(opts.Address.Host, pool),
 		Logger:    opts.Logger,
 	}
 
@@ -140,38 +139,8 @@ func (c *httpClusterClient) Close() error {
 	return nil
 }
 
-func createTLSConfig(endpoint string, cipherSuite []*tls.CipherSuite, pool *x509.CertPool, logger Logger) *tls.Config {
+func createTLSConfig(endpoint string, pool *x509.CertPool) *tls.Config {
 	var suites []uint16
-
-	if cipherSuite != nil {
-		suites = make([]uint16, len(cipherSuite))
-
-		for i, suite := range cipherSuite {
-			var s uint16
-
-			for _, suiteID := range tls.CipherSuites() {
-				if suite.Name == suiteID.Name {
-					s = suiteID.ID
-
-					break
-				}
-			}
-
-			for _, suiteID := range tls.InsecureCipherSuites() {
-				if suite.Name == suiteID.Name {
-					s = suiteID.ID
-
-					break
-				}
-			}
-
-			if s > 0 {
-				suites[i] = s
-			} else {
-				logger.Warn("Unknown cipher suite %s, ignoring", suite.Name)
-			}
-		}
-	}
 
 	var insecureSkipVerify bool
 	if pool == nil {
