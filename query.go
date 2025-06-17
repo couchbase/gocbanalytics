@@ -32,7 +32,6 @@ func (s *Scope) ExecuteQuery(ctx context.Context, statement string, opts ...*Que
 
 func mergeQueryOptions(opts ...*QueryOptions) *QueryOptions {
 	queryOpts := &QueryOptions{
-		Priority:             nil,
 		PositionalParameters: nil,
 		NamedParameters:      nil,
 		ReadOnly:             nil,
@@ -52,10 +51,6 @@ func mergeQueryOptions(opts ...*QueryOptions) *QueryOptions {
 
 		if opt.ReadOnly != nil {
 			queryOpts.ReadOnly = opt.ReadOnly
-		}
-
-		if opt.Priority != nil {
-			queryOpts.Priority = opt.Priority
 		}
 
 		if len(opt.PositionalParameters) > 0 {

@@ -12,9 +12,6 @@ const (
 
 // QueryOptions is the set of options available to an Analytics query.
 type QueryOptions struct {
-	// Priority sets whether this query should be assigned as high priority by the analytics engine.
-	Priority *bool
-
 	// PositionalParameters sets any positional placeholder parameters for the query.
 	PositionalParameters []interface{}
 
@@ -37,7 +34,6 @@ type QueryOptions struct {
 // NewQueryOptions creates a new instance of QueryOptions.
 func NewQueryOptions() *QueryOptions {
 	return &QueryOptions{
-		Priority:             nil,
 		PositionalParameters: nil,
 		NamedParameters:      nil,
 		ReadOnly:             nil,
@@ -45,13 +41,6 @@ func NewQueryOptions() *QueryOptions {
 		Raw:                  nil,
 		Unmarshaler:          nil,
 	}
-}
-
-// SetPriority sets the Priority field in QueryOptions.
-func (opts *QueryOptions) SetPriority(priority bool) *QueryOptions {
-	opts.Priority = &priority
-
-	return opts
 }
 
 // SetPositionalParameters sets the PositionalParameters field in QueryOptions.

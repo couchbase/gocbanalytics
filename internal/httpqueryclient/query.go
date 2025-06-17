@@ -34,10 +34,6 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 	header := make(http.Header)
 	header.Set("Content-Type", "application/json")
 
-	if opts.Priority != nil {
-		header.Set("Analytics-Priority", fmt.Sprintf("%d", *opts.Priority))
-	}
-
 	ctxDeadline, _ := ctx.Deadline()
 
 	var serverDeadline time.Time

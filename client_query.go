@@ -79,13 +79,6 @@ func (c *httpQueryClient) Query(ctx context.Context, statement string, opts *Que
 }
 
 func (c *httpQueryClient) translateQueryOptions(ctx context.Context, statement string, opts *QueryOptions) (*httpqueryclient.QueryOptions, error) {
-	var priority *int
-
-	if opts.Priority != nil && *opts.Priority {
-		minus1 := -1
-		priority = &minus1
-	}
-
 	execOpts := make(map[string]interface{})
 	if opts.PositionalParameters != nil {
 		execOpts["args"] = opts.PositionalParameters
@@ -150,7 +143,6 @@ func (c *httpQueryClient) translateQueryOptions(ctx context.Context, statement s
 
 	return &httpqueryclient.QueryOptions{
 		Payload:            execOpts,
-		Priority:           priority,
 		CredentialProvider: credentialProvider,
 	}, nil
 }
