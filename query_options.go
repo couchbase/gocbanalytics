@@ -12,6 +12,9 @@ const (
 
 // QueryOptions is the set of options available to an Analytics query.
 type QueryOptions struct {
+	// ClientContextID is an optional identifier for the query.
+	ClientContextID *string
+
 	// PositionalParameters sets any positional placeholder parameters for the query.
 	PositionalParameters []interface{}
 
@@ -34,6 +37,7 @@ type QueryOptions struct {
 // NewQueryOptions creates a new instance of QueryOptions.
 func NewQueryOptions() *QueryOptions {
 	return &QueryOptions{
+		ClientContextID:      nil,
 		PositionalParameters: nil,
 		NamedParameters:      nil,
 		ReadOnly:             nil,
@@ -41,6 +45,12 @@ func NewQueryOptions() *QueryOptions {
 		Raw:                  nil,
 		Unmarshaler:          nil,
 	}
+}
+
+func (opts *QueryOptions) SetClientContextID(clientContextID string) *QueryOptions {
+	opts.ClientContextID = &clientContextID
+
+	return opts
 }
 
 // SetPositionalParameters sets the PositionalParameters field in QueryOptions.

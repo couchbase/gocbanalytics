@@ -32,6 +32,7 @@ func (s *Scope) ExecuteQuery(ctx context.Context, statement string, opts ...*Que
 
 func mergeQueryOptions(opts ...*QueryOptions) *QueryOptions {
 	queryOpts := &QueryOptions{
+		ClientContextID:      nil,
 		PositionalParameters: nil,
 		NamedParameters:      nil,
 		ReadOnly:             nil,
@@ -43,6 +44,10 @@ func mergeQueryOptions(opts ...*QueryOptions) *QueryOptions {
 	for _, opt := range opts {
 		if opt == nil {
 			continue
+		}
+
+		if opt.ClientContextID != nil {
+			queryOpts.ClientContextID = opt.ClientContextID
 		}
 
 		if opt.ScanConsistency != nil {

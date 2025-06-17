@@ -60,7 +60,13 @@ func (c *httpQueryClient) Query(ctx context.Context, statement string, opts *Que
 		clientOpts.Payload["query_context"] = fmt.Sprintf("default:`%s`.`%s`", c.namespace.Database, c.namespace.Scope)
 	}
 
-	clientOpts.Payload["client_context_id"] = uuid.NewString()
+	clientContextID := opts.ClientContextID
+	if clientContextID == nil {
+		id := uuid.NewString()
+		clientContextID = &id
+	}
+
+	clientOpts.Payload["client_context_id"] = clientContextID
 
 	res, err := c.client.Query(ctx, clientOpts)
 	if err != nil {
