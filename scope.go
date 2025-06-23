@@ -1,6 +1,6 @@
 package cbanalytics
 
-// Scope represents a Columnar scope.
+// Scope represents an Analytics scope.
 type Scope struct {
 	client scopeClient
 }

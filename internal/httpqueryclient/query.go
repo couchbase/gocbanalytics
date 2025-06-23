@@ -58,16 +58,16 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 
 	uniqueID := uuid.NewString()
 
-	backoff := columnarExponentialBackoffWithJitter(100*time.Millisecond, 1*time.Minute, 2)
+	backoff := analyticsExponentialBackoffWithJitter(100*time.Millisecond, 1*time.Minute, 2)
 
 	addrs, err := c.resolver.LookupHost(ctx, c.host)
 	if err != nil {
-		return nil, newColumnarError(newObfuscateErrorWrapper("failed to lookup host", err), statement, c.host, 0)
+		return nil, newAnalyticsError(newObfuscateErrorWrapper("failed to lookup host", err), statement, c.host, 0)
 	}
 
 	for {
 		if len(addrs) == 0 {
-			return nil, newColumnarError(lastRootErr, statement, c.host, 0).withLastDetail(lastCode, lastMessage)
+			return nil, newAnalyticsError(lastRootErr, statement, c.host, 0).withLastDetail(lastCode, lastMessage)
 		}
 
 		idx := rand.Intn(len(addrs))
@@ -103,13 +103,13 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 			// We don't want to bail out on connection errors as they may be because of dial timeout.
 			if connectDoneErr == nil {
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-					return nil, newColumnarError(err, statement, c.host, 0)
+					return nil, newAnalyticsError(err, statement, c.host, 0)
 				}
 			}
 
-			newBody, notRetriableErr := handleMaybeRetryColumnar(ctxDeadline, serverDeadline, backoff, retries, opts.Payload)
+			newBody, notRetriableErr := handleMaybeRetryAnalytics(ctxDeadline, serverDeadline, backoff, retries, opts.Payload)
 			if notRetriableErr != nil {
-				return nil, newColumnarError(notRetriableErr, statement, c.host, 0).withLastDetail(lastCode, lastMessage)
+				return nil, newAnalyticsError(notRetriableErr, statement, c.host, 0).withLastDetail(lastCode, lastMessage)
 			}
 
 			addrs = append(addrs[:idx], addrs[idx+1:]...)
@@ -127,13 +127,13 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 		if resp.StatusCode != 200 {
 			respBody, readErr := io.ReadAll(resp.Body)
 			if readErr != nil {
-				return nil, newColumnarError(newObfuscateErrorWrapper("failed to read response body", readErr), statement,
+				return nil, newAnalyticsError(newObfuscateErrorWrapper("failed to read response body", readErr), statement,
 					c.host, resp.StatusCode)
 			}
 
-			cErr := parseColumnarErrorResponse(respBody, statement, c.host, resp.StatusCode, lastCode, lastMessage)
+			cErr := parseAnalyticsErrorResponse(respBody, statement, c.host, resp.StatusCode, lastCode, lastMessage)
 			if cErr != nil {
-				first, retriable := isColumnarErrorRetriable(cErr)
+				first, retriable := isAnalyticsErrorRetriable(cErr)
 				if !retriable {
 					return nil, cErr
 				}
@@ -145,9 +145,9 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 					lastMessage = first.Message
 				}
 
-				newBody, err := handleMaybeRetryColumnar(ctxDeadline, serverDeadline, backoff, retries, opts.Payload)
+				newBody, err := handleMaybeRetryAnalytics(ctxDeadline, serverDeadline, backoff, retries, opts.Payload)
 				if err != nil {
-					return nil, newColumnarError(err, statement, c.host, resp.StatusCode).
+					return nil, newAnalyticsError(err, statement, c.host, resp.StatusCode).
 						withErrors(cErr.Errors).
 						withErrorText(string(respBody)).
 						withLastDetail(lastCode, lastMessage)
@@ -159,7 +159,7 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 				continue
 			}
 
-			return nil, newColumnarError(
+			return nil, newAnalyticsError(
 				errors.New("query returned non-200 status code but no errors in body"), //nolint:err113
 				statement,
 				c.host,
@@ -175,7 +175,7 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 				c.logger.Debug("Failed to read response body: %v", readErr)
 			}
 
-			return nil, newColumnarError(newObfuscateErrorWrapper("failed to parse success response body", readErr),
+			return nil, newAnalyticsError(newObfuscateErrorWrapper("failed to parse success response body", readErr),
 				statement,
 				c.host,
 				resp.StatusCode).
@@ -187,7 +187,7 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 		if peeked == nil {
 			err := streamer.Err()
 			if err != nil {
-				return nil, newColumnarError(err,
+				return nil, newAnalyticsError(err,
 					statement,
 					c.host,
 					resp.StatusCode)
@@ -195,15 +195,15 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 
 			meta, metaErr := streamer.MetaData()
 			if metaErr != nil {
-				return nil, newColumnarError(metaErr,
+				return nil, newAnalyticsError(metaErr,
 					statement,
 					c.host,
 					resp.StatusCode)
 			}
 
-			cErr := parseColumnarErrorResponse(meta, statement, c.host, resp.StatusCode, lastCode, lastMessage)
+			cErr := parseAnalyticsErrorResponse(meta, statement, c.host, resp.StatusCode, lastCode, lastMessage)
 			if cErr != nil {
-				first, retriable := isColumnarErrorRetriable(cErr)
+				first, retriable := isAnalyticsErrorRetriable(cErr)
 				if !retriable {
 					return nil, cErr
 				}
@@ -215,9 +215,9 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 					lastMessage = first.Message
 				}
 
-				newBody, err := handleMaybeRetryColumnar(ctxDeadline, serverDeadline, backoff, retries, opts.Payload)
+				newBody, err := handleMaybeRetryAnalytics(ctxDeadline, serverDeadline, backoff, retries, opts.Payload)
 				if err != nil {
-					return nil, newColumnarError(err, statement, c.host, resp.StatusCode).
+					return nil, newAnalyticsError(err, statement, c.host, resp.StatusCode).
 						withErrors(cErr.Errors).
 						withErrorText(string(meta)).
 						withLastDetail(lastCode, lastMessage)
@@ -240,16 +240,16 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 	}
 }
 
-func parseColumnarErrorResponse(respBody []byte, statement, endpoint string, statusCode int, lastCode uint32, lastMsg string) *QueryError {
+func parseAnalyticsErrorResponse(respBody []byte, statement, endpoint string, statusCode int, lastCode uint32, lastMsg string) *QueryError {
 	var rawRespParse jsonAnalyticsErrorResponse
 
 	if statusCode == 401 {
-		return newColumnarError(ErrInvalidCredential, statement, endpoint, statusCode)
+		return newAnalyticsError(ErrInvalidCredential, statement, endpoint, statusCode)
 	}
 
 	parseErr := json.Unmarshal(respBody, &rawRespParse)
 	if parseErr != nil {
-		return newColumnarError(newObfuscateErrorWrapper("failed to parse response errors", parseErr), statement, endpoint, statusCode).
+		return newAnalyticsError(newObfuscateErrorWrapper("failed to parse response errors", parseErr), statement, endpoint, statusCode).
 			withLastDetail(lastCode, lastMsg).
 			withErrorText(string(respBody))
 	}
@@ -262,7 +262,7 @@ func parseColumnarErrorResponse(respBody []byte, statement, endpoint string, sta
 
 	parseErr = json.Unmarshal(rawRespParse.Errors, &respParse)
 	if parseErr != nil {
-		return newColumnarError(newObfuscateErrorWrapper("failed to parse response errors", parseErr), statement, endpoint, statusCode).
+		return newAnalyticsError(newObfuscateErrorWrapper("failed to parse response errors", parseErr), statement, endpoint, statusCode).
 			withLastDetail(lastCode, lastMsg).
 			withErrorText(string(respBody))
 	}
@@ -291,16 +291,16 @@ func parseColumnarErrorResponse(respBody []byte, statement, endpoint string, sta
 	}
 
 	if innerErr == nil {
-		innerErr = ErrColumnar
+		innerErr = ErrAnalytics
 	}
 
-	return newColumnarError(innerErr, statement, endpoint, statusCode).
+	return newAnalyticsError(innerErr, statement, endpoint, statusCode).
 		withLastDetail(lastCode, lastMsg).
 		withErrorText(string(respBody)).
 		withErrors(errDescs)
 }
 
-func isColumnarErrorRetriable(cErr *QueryError) (*ErrorDesc, bool) {
+func isAnalyticsErrorRetriable(cErr *QueryError) (*ErrorDesc, bool) {
 	// If there are no errors then we shouldn't retry.
 	if len(cErr.Errors) == 0 {
 		return nil, false
@@ -336,7 +336,7 @@ func isColumnarErrorRetriable(cErr *QueryError) (*ErrorDesc, bool) {
 }
 
 // Note in the interest of keeping this signature sane, we return a raw base error here.
-func handleMaybeRetryColumnar(ctxDeadline time.Time, serverDeadline time.Time, calc backoffCalculator,
+func handleMaybeRetryAnalytics(ctxDeadline time.Time, serverDeadline time.Time, calc backoffCalculator,
 	retries uint32, payload map[string]interface{}) ([]byte, error) {
 	b := calc(retries)
 
@@ -372,7 +372,7 @@ func handleMaybeRetryColumnar(ctxDeadline time.Time, serverDeadline time.Time, c
 
 type backoffCalculator func(retryAttempts uint32) time.Duration
 
-func columnarExponentialBackoffWithJitter(min, max time.Duration, backoffFactor float64) backoffCalculator { //nolint:revive
+func analyticsExponentialBackoffWithJitter(min, max time.Duration, backoffFactor float64) backoffCalculator { //nolint:revive
 	var minBackoff float64 = 1000000 // 1 Millisecond
 
 	var maxBackoff float64 = 500000000 // 500 Milliseconds

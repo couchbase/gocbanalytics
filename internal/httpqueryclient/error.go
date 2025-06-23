@@ -8,8 +8,8 @@ import (
 )
 
 var (
-	// ErrColumnar occurs from a client-server interaction with the Columnar service.
-	ErrColumnar = errors.New("columnar error")
+	// ErrAnalytics occurs from a client-server interaction with the Analytics service.
+	ErrAnalytics = errors.New("analytics error")
 
 	// ErrContextDeadlineWouldBeExceeded is returned when a Deadline set on an operation
 	// would be exceeded if the operation were sent to the server. It wraps
@@ -26,7 +26,7 @@ var (
 	ErrInvalidCredential = errors.New("an invalid set of credentials was provided")
 )
 
-// ErrorDesc represents specific Columnar error data.
+// ErrorDesc represents specific Analytics error data.
 type ErrorDesc struct {
 	Code    uint32
 	Message string
@@ -49,7 +49,7 @@ func (e ErrorDesc) MarshalJSON() ([]byte, error) {
 	return b, nil
 }
 
-// QueryError represents an error returned from a Columnar query.
+// QueryError represents an error returned from an Analytics query.
 type QueryError struct {
 	InnerError       error
 	Statement        string
@@ -61,7 +61,7 @@ type QueryError struct {
 	HTTPResponseCode int
 }
 
-func newColumnarError(innerError error, statement string, endpoint string, responseCode int) *QueryError {
+func newAnalyticsError(innerError error, statement string, endpoint string, responseCode int) *QueryError {
 	return &QueryError{
 		InnerError:       innerError,
 		Statement:        statement,

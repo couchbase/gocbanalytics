@@ -26,7 +26,7 @@ type TestOptions struct {
 }
 
 func TestMain(m *testing.M) {
-	var connStr = envFlagString("CBCONNSTR", "connstr", "",
+	var connStr = envFlagString("CBCONNSTR", "connstr", "http://192.168.107.140",
 		"Connection string to run tests with")
 
 	var user = envFlagString("CBUSER", "user", "Administrator",
@@ -63,7 +63,7 @@ func TestMain(m *testing.M) {
 
 	leakcheck.EnableAll()
 
-	setupColumnar()
+	setupAnalytics()
 
 	result := m.Run()
 
@@ -111,7 +111,7 @@ func TestMain(m *testing.M) {
 	os.Exit(result)
 }
 
-func setupColumnar() {
+func setupAnalytics() {
 	cluster, err := cbanalytics.NewCluster(TestOpts.OriginalConnStr, cbanalytics.NewBasicAuthCredential(TestOpts.Username, TestOpts.Password), DefaultOptions())
 	if err != nil {
 		panic(err)

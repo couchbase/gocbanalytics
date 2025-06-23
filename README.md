@@ -8,7 +8,7 @@ Go client for [Couchbase](https://couchbase.com) Analytics.
 ### Documentation
 You can explore our API reference through godoc at [https://pkg.go.dev/github.com/couchbase/gocbanalytics](https://pkg.go.dev/github.com/couchbase/gocbanalytics).
 
-[//]: # (You can also find documentation for the Go Columnar SDK on the [official Couchbase docs]&#40;https://docs.couchbase.com/go-columnar-sdk/current/hello-world/overview.html&#41;.)
+[//]: # (You can also find documentation for the Go Analytics SDK on the [official Couchbase docs]&#40;https://docs.couchbase.com/go-columnar-sdk/current/hello-world/overview.html&#41;.)
 
 ## Installing
 
@@ -115,7 +115,7 @@ You can run tests in the usual Go way:
 
 `go test -race ./... --connstr couchbases://... --username ... --password ... --database ... --scope ...`
 
-Which will execute tests against the specified Columnar instance.
+Which will execute tests against the specified Analytics instance.
 See the `testmain_test.go` file for more information on command line arguments.
 
 ## Linting

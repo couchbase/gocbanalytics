@@ -11,5 +11,5 @@ func Version() string {
 
 // Identifier returns a string representation of the current SDK identifier.
 func Identifier() string {
-	return "gocb-columnar/" + versionStr
+	return "gocb-analytics/" + versionStr
 }

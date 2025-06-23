@@ -221,17 +221,17 @@ func translateClientError(err error) error {
 	}
 
 	if clientErr.HTTPResponseCode == 401 {
-		return newColumnarError(clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode).
+		return newAnalyticsError(clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode).
 			withMessage(clientErr.InnerError.Error()).
 			withCause(ErrInvalidCredential)
 	}
 
 	if len(clientErr.Errors) > 0 {
-		var firstNonRetriableErr *columnarErrorDesc
+		var firstNonRetriableErr *analyticsErrorDesc
 
-		descs := make([]columnarErrorDesc, len(clientErr.Errors))
+		descs := make([]analyticsErrorDesc, len(clientErr.Errors))
 		for i, desc := range clientErr.Errors {
-			descs[i] = columnarErrorDesc{
+			descs[i] = analyticsErrorDesc{
 				Code:    desc.Code,
 				Message: desc.Message,
 			}
@@ -254,13 +254,13 @@ func translateClientError(err error) error {
 		}
 
 		if code == 20000 {
-			return newColumnarError(clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode).
+			return newAnalyticsError(clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode).
 				withErrors(descs).
 				withCause(ErrInvalidCredential)
 		}
 
 		if code == 21002 {
-			return newColumnarError(clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode).
+			return newAnalyticsError(clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode).
 				withErrors(descs).
 				withCause(ErrTimeout)
 		}
@@ -280,7 +280,7 @@ func translateClientError(err error) error {
 		return qErr
 	}
 
-	baseErr := newColumnarError(clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode).
+	baseErr := newAnalyticsError(clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode).
 		withMessage(clientErr.InnerError.Error())
 
 	switch {
