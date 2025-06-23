@@ -89,11 +89,11 @@ func TestOperationTimeout(t *testing.T) {
 			_, err := queryable.ExecuteQuery(ctx, "SELECT sleep('foo', 5000);")
 			require.ErrorIs(ttt, err, context.DeadlineExceeded)
 
-			var columnarErr *cbanalytics.ColumnarError
+			var analyticsErr *cbanalytics.AnalyticsError
 
-			require.ErrorAs(ttt, err, &columnarErr)
+			require.ErrorAs(ttt, err, &analyticsErr)
 
-			assert.NotContains(ttt, columnarErr.Error(), "operation not sent to server")
+			assert.NotContains(ttt, analyticsErr.Error(), "operation not sent to server")
 		})
 	})
 
@@ -108,11 +108,11 @@ func TestOperationTimeout(t *testing.T) {
 			_, err := queryable.ExecuteQuery(ctx, "SELECT sleep('foo', 5000);")
 			require.ErrorIs(ttt, err, context.Canceled)
 
-			var columnarErr *cbanalytics.ColumnarError
+			var analyticsErr *cbanalytics.AnalyticsError
 
-			require.ErrorAs(ttt, err, &columnarErr)
+			require.ErrorAs(ttt, err, &analyticsErr)
 
-			assert.NotContains(ttt, columnarErr.Error(), "operation not sent to server")
+			assert.NotContains(ttt, analyticsErr.Error(), "operation not sent to server")
 		})
 	})
 
@@ -133,11 +133,11 @@ func TestOperationTimeout(t *testing.T) {
 			_, err := queryable.ExecuteQuery(ctx, "SELECT sleep('foo', 5000);")
 			require.ErrorIs(ttt, err, cbanalytics.ErrTimeout)
 
-			var columnarErr *cbanalytics.ColumnarError
+			var analyticsErr *cbanalytics.AnalyticsError
 
-			require.ErrorAs(ttt, err, &columnarErr)
+			require.ErrorAs(ttt, err, &analyticsErr)
 
-			assert.NotContains(ttt, columnarErr.Error(), "operation not sent to server")
+			assert.NotContains(ttt, analyticsErr.Error(), "operation not sent to server")
 		})
 	})
 }
@@ -160,9 +160,9 @@ func TestQueryError(t *testing.T) {
 		_, err := queryable.ExecuteQuery(ctx, "SELEC 123;")
 		require.ErrorIs(tt, err, cbanalytics.ErrQuery)
 
-		var columnarErr *cbanalytics.ColumnarError
+		var analyticsErr *cbanalytics.AnalyticsError
 
-		require.ErrorAs(tt, err, &columnarErr)
+		require.ErrorAs(tt, err, &analyticsErr)
 
 		var queryErr *cbanalytics.QueryError
 
@@ -191,9 +191,9 @@ func TestInvalidCredential(t *testing.T) {
 		_, err := queryable.ExecuteQuery(ctx, "SELECT 123;")
 		require.ErrorIs(tt, err, cbanalytics.ErrInvalidCredential)
 
-		var columnarErr *cbanalytics.ColumnarError
+		var analyticsErr *cbanalytics.AnalyticsError
 
-		require.ErrorAs(tt, err, &columnarErr)
+		require.ErrorAs(tt, err, &analyticsErr)
 	})
 }
 

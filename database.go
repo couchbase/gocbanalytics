@@ -1,6 +1,6 @@
 package cbanalytics
 
-// Database represents a Columnar database and provides access to Scope.
+// Database represents an Analytics database and provides access to Scope.
 type Database struct {
 	client databaseClient
 }

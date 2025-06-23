@@ -6,8 +6,8 @@ import (
 	"fmt"
 )
 
-// ErrColumnar is the base error for any Columnar error that is not captured by a more specific error.
-var ErrColumnar = errors.New("columnar error")
+// ErrAnalytics is the base error for any Analytics error that is not captured by a more specific error.
+var ErrAnalytics = errors.New("analytics error")
 
 // ErrInvalidCredential occurs when invalid credentials are provided leading to errors in things like authentication.
 var ErrInvalidCredential = errors.New("invalid credential")
@@ -29,12 +29,12 @@ var ErrClosed = errors.New("closed")
 // ErrUnmarshal occurs when an entity could not be unmarshalled.
 var ErrUnmarshal = errors.New("unmarshalling error")
 
-type columnarErrorDesc struct {
+type analyticsErrorDesc struct {
 	Code    uint32
 	Message string
 }
 
-func (e columnarErrorDesc) MarshalJSON() ([]byte, error) {
+func (e analyticsErrorDesc) MarshalJSON() ([]byte, error) {
 	b, err := json.Marshal(struct {
 		Code    uint32 `json:"code"`
 		Message string `json:"msg"`
@@ -43,26 +43,25 @@ func (e columnarErrorDesc) MarshalJSON() ([]byte, error) {
 		Message: e.Message,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal columnar error description: %s", err) // nolint: err113, errorlint
+		return nil, fmt.Errorf("failed to marshal analytics error description: %s", err) // nolint: err113, errorlint
 	}
 
 	return b, nil
 }
 
-// ColumnarError occurs when an error is encountered while interacting with the Columnar service.
-type ColumnarError struct {
+// AnalyticsError occurs when an error is encountered while interacting with the Analytics service.
+type AnalyticsError struct {
 	cause   error
 	message string
 
-	errors           []columnarErrorDesc
+	errors           []analyticsErrorDesc
 	statement        string
 	endpoint         string
 	httpResponseCode int
 }
 
-// nolint: unused
-func newColumnarError(statement, endpoint string, statusCode int) ColumnarError {
-	return ColumnarError{
+func newAnalyticsError(statement, endpoint string, statusCode int) AnalyticsError {
+	return AnalyticsError{
 		cause:            nil,
 		errors:           nil,
 		statement:        statement,
@@ -72,32 +71,32 @@ func newColumnarError(statement, endpoint string, statusCode int) ColumnarError 
 	}
 }
 
-func (e ColumnarError) withMessage(message string) *ColumnarError {
+func (e AnalyticsError) withMessage(message string) *AnalyticsError {
 	e.message = message
 
 	return &e
 }
 
-func (e ColumnarError) withErrors(errors []columnarErrorDesc) *ColumnarError {
+func (e AnalyticsError) withErrors(errors []analyticsErrorDesc) *AnalyticsError {
 	e.errors = errors
 
 	return &e
 }
 
-func (e ColumnarError) withCause(cause error) *ColumnarError {
+func (e AnalyticsError) withCause(cause error) *AnalyticsError {
 	e.cause = cause
 
 	return &e
 }
 
-// Error returns the string representation of a Columnar error.
-func (e ColumnarError) Error() string {
+// Error returns the string representation of an Analytics error.
+func (e AnalyticsError) Error() string {
 	errBytes, _ := json.Marshal(struct {
-		Statement        string              `json:"statement,omitempty"`
-		Errors           []columnarErrorDesc `json:"errors,omitempty"`
-		Message          string              `json:"message,omitempty"`
-		Endpoint         string              `json:"endpoint,omitempty"`
-		HTTPResponseCode int                 `json:"status_code,omitempty"`
+		Statement        string               `json:"statement,omitempty"`
+		Errors           []analyticsErrorDesc `json:"errors,omitempty"`
+		Message          string               `json:"message,omitempty"`
+		Endpoint         string               `json:"endpoint,omitempty"`
+		HTTPResponseCode int                  `json:"status_code,omitempty"`
 	}{
 		Statement:        e.statement,
 		Errors:           e.errors,
@@ -108,16 +107,16 @@ func (e ColumnarError) Error() string {
 
 	cause := e.cause
 	if cause == nil {
-		cause = ErrColumnar
+		cause = ErrAnalytics
 	}
 
 	return cause.Error() + " | " + string(errBytes)
 }
 
 // Unwrap returns the underlying reason for the error.
-func (e ColumnarError) Unwrap() error {
+func (e AnalyticsError) Unwrap() error {
 	if e.cause == nil {
-		return ErrColumnar
+		return ErrAnalytics
 	}
 
 	return e.cause
@@ -126,7 +125,7 @@ func (e ColumnarError) Unwrap() error {
 // QueryError occurs when an error is returned in the errors field of the response body of a response
 // from the query server.
 type QueryError struct {
-	cause   *ColumnarError
+	cause   *AnalyticsError
 	code    int
 	message string
 }
@@ -151,7 +150,7 @@ func (e QueryError) Unwrap() error {
 	return e.cause
 }
 
-func (e QueryError) withErrors(errors []columnarErrorDesc) *QueryError {
+func (e QueryError) withErrors(errors []analyticsErrorDesc) *QueryError {
 	e.cause.errors = errors
 
 	return &e
@@ -160,7 +159,7 @@ func (e QueryError) withErrors(errors []columnarErrorDesc) *QueryError {
 // nolint: unused
 func newQueryError(statement, endpoint string, statusCode int, code int, message string) QueryError {
 	return QueryError{
-		cause: &ColumnarError{
+		cause: &AnalyticsError{
 			cause:            ErrQuery,
 			errors:           nil,
 			statement:        statement,

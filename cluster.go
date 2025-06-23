@@ -7,7 +7,7 @@ import (
 )
 
 // Cluster is the main entry point for the SDK.
-// It is used to perform operations on the data against a Couchbase Columnar cluster.
+// It is used to perform operations on the data against a Couchbase Analytics cluster.
 type Cluster struct {
 	client clusterClient
 }
