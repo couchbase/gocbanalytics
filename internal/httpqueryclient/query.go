@@ -62,7 +62,7 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 
 	addrs, err := c.resolver.LookupHost(ctx, c.host)
 	if err != nil {
-		return nil, fmt.Errorf("failed to lookup host: %w", err)
+		return nil, newColumnarError(newObfuscateErrorWrapper("failed to lookup host", err), statement, c.host, 0)
 	}
 
 	for {
@@ -107,9 +107,9 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 				}
 			}
 
-			newBody, err := handleMaybeRetryColumnar(ctxDeadline, serverDeadline, backoff, retries, opts.Payload)
-			if err != nil {
-				return nil, newColumnarError(err, statement, c.host, 0).withLastDetail(lastCode, lastMessage)
+			newBody, notRetriableErr := handleMaybeRetryColumnar(ctxDeadline, serverDeadline, backoff, retries, opts.Payload)
+			if notRetriableErr != nil {
+				return nil, newColumnarError(notRetriableErr, statement, c.host, 0).withLastDetail(lastCode, lastMessage)
 			}
 
 			addrs = append(addrs[:idx], addrs[idx+1:]...)
