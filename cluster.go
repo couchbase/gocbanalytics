@@ -164,7 +164,7 @@ func NewCluster(httpEndpoint string, credential Credential, opts ...*ClusterOpti
 		unmarshaler = NewJSONUnmarshaler()
 	}
 
-	if clusterOpts.SecurityOptions.DisableServerCertificateVerification != nil && *clusterOpts.SecurityOptions.DisableServerCertificateVerification {
+	if securityOpts.DisableServerCertificateVerification != nil && *securityOpts.DisableServerCertificateVerification {
 		logger.Warn("server certificate verification is disabled, this is insecure")
 	}
 
