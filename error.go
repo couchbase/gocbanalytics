@@ -29,6 +29,9 @@ var ErrClosed = errors.New("closed")
 // ErrUnmarshal occurs when an entity could not be unmarshalled.
 var ErrUnmarshal = errors.New("unmarshalling error")
 
+// ErrServiceUnavailable occurs when the Analytics service, or a part of the system in the path to it, is unavailable.
+var ErrServiceUnavailable = errors.New("service unavailable")
+
 type analyticsErrorDesc struct {
 	Code    uint32
 	Message string
@@ -73,12 +76,6 @@ func newAnalyticsError(statement, endpoint string, statusCode int) AnalyticsErro
 
 func (e AnalyticsError) withMessage(message string) *AnalyticsError {
 	e.message = message
-
-	return &e
-}
-
-func (e AnalyticsError) withErrors(errors []analyticsErrorDesc) *AnalyticsError {
-	e.errors = errors
 
 	return &e
 }
@@ -157,10 +154,14 @@ func (e QueryError) withErrors(errors []analyticsErrorDesc) *QueryError {
 }
 
 // nolint: unused
-func newQueryError(statement, endpoint string, statusCode int, code int, message string) QueryError {
+func newQueryError(cause error, statement, endpoint string, statusCode int, code int, message string) QueryError {
+	if cause == nil {
+		cause = ErrQuery
+	}
+
 	return QueryError{
 		cause: &AnalyticsError{
-			cause:            ErrQuery,
+			cause:            cause,
 			errors:           nil,
 			statement:        statement,
 			endpoint:         endpoint,

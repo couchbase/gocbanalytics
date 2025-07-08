@@ -124,7 +124,7 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 		c.logger.Trace("Received HTTP Response for ID=%s, status=%d", uniqueID, resp.StatusCode)
 
 		resp = leakcheck.WrapHTTPResponse(resp) // nolint: bodyclose
-		if resp.StatusCode != 200 {
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 			respBody, readErr := io.ReadAll(resp.Body)
 			if readErr != nil {
 				return nil, newAnalyticsError(newObfuscateErrorWrapper("failed to read response body", readErr), statement,
@@ -241,11 +241,11 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 }
 
 func parseAnalyticsErrorResponse(respBody []byte, statement, endpoint string, statusCode int, lastCode uint32, lastMsg string) *QueryError {
-	var rawRespParse jsonAnalyticsErrorResponse
-
 	if statusCode == 401 {
 		return newAnalyticsError(ErrInvalidCredential, statement, endpoint, statusCode)
 	}
+
+	var rawRespParse jsonAnalyticsErrorResponse
 
 	parseErr := json.Unmarshal(respBody, &rawRespParse)
 	if parseErr != nil {
@@ -255,6 +255,10 @@ func parseAnalyticsErrorResponse(respBody []byte, statement, endpoint string, st
 	}
 
 	if len(rawRespParse.Errors) == 0 {
+		if statusCode == 503 {
+			return newAnalyticsError(ErrServiceUnavailable, statement, endpoint, statusCode)
+		}
+
 		return nil
 	}
 
@@ -271,8 +275,6 @@ func parseAnalyticsErrorResponse(respBody []byte, statement, endpoint string, st
 		return nil
 	}
 
-	var innerErr error
-
 	errDescs := make([]ErrorDesc, len(respParse))
 	for i, jsonErr := range respParse {
 		errDescs[i] = ErrorDesc{
@@ -280,27 +282,19 @@ func parseAnalyticsErrorResponse(respBody []byte, statement, endpoint string, st
 			Message: jsonErr.Msg,
 			Retry:   jsonErr.Retry,
 		}
-
-		if innerErr == nil {
-			if jsonErr.Code == 21002 {
-				innerErr = ErrTimeout
-			} else if jsonErr.Code == 20000 {
-				innerErr = ErrInvalidCredential
-			}
-		}
 	}
 
-	if innerErr == nil {
-		innerErr = ErrAnalytics
-	}
-
-	return newAnalyticsError(innerErr, statement, endpoint, statusCode).
+	return newAnalyticsError(ErrAnalytics, statement, endpoint, statusCode).
 		withLastDetail(lastCode, lastMsg).
 		withErrorText(string(respBody)).
 		withErrors(errDescs)
 }
 
 func isAnalyticsErrorRetriable(cErr *QueryError) (*ErrorDesc, bool) {
+	if errors.Is(cErr, ErrServiceUnavailable) {
+		return nil, true
+	}
+
 	// If there are no errors then we shouldn't retry.
 	if len(cErr.Errors) == 0 {
 		return nil, false
@@ -328,7 +322,7 @@ func isAnalyticsErrorRetriable(cErr *QueryError) (*ErrorDesc, bool) {
 		return nil, false
 	}
 
-	if first == nil && len(cErr.Errors) > 0 {
+	if first == nil {
 		first = &cErr.Errors[0]
 	}
 
