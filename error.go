@@ -63,9 +63,13 @@ type AnalyticsError struct {
 	httpResponseCode int
 }
 
-func newAnalyticsError(statement, endpoint string, statusCode int) AnalyticsError {
+func newAnalyticsError(cause error, statement, endpoint string, statusCode int) AnalyticsError {
+	if cause == nil {
+		cause = ErrAnalytics
+	}
+
 	return AnalyticsError{
-		cause:            nil,
+		cause:            cause,
 		errors:           nil,
 		statement:        statement,
 		endpoint:         endpoint,
@@ -76,12 +80,6 @@ func newAnalyticsError(statement, endpoint string, statusCode int) AnalyticsErro
 
 func (e AnalyticsError) withMessage(message string) *AnalyticsError {
 	e.message = message
-
-	return &e
-}
-
-func (e AnalyticsError) withCause(cause error) *AnalyticsError {
-	e.cause = cause
 
 	return &e
 }
@@ -102,12 +100,7 @@ func (e AnalyticsError) Error() string {
 		HTTPResponseCode: e.httpResponseCode,
 	})
 
-	cause := e.cause
-	if cause == nil {
-		cause = ErrAnalytics
-	}
-
-	return cause.Error() + " | " + string(errBytes)
+	return e.cause.Error() + " | " + string(errBytes)
 }
 
 // Unwrap returns the underlying reason for the error.

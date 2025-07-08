@@ -221,7 +221,7 @@ func translateClientError(err error) error {
 	}
 
 	if len(clientErr.Errors) == 0 {
-		var baseErr error
+		baseErr := err
 
 		switch {
 		case errors.Is(err, httpqueryclient.ErrInvalidCredential):
@@ -236,14 +236,8 @@ func translateClientError(err error) error {
 			baseErr = context.DeadlineExceeded
 		}
 
-		err := newAnalyticsError(clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode).
+		return newAnalyticsError(baseErr, clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode).
 			withMessage(clientErr.InnerError.Error())
-
-		if baseErr != nil {
-			err = err.withCause(baseErr)
-		}
-
-		return err
 	}
 
 	var firstNonRetriableErr *analyticsErrorDesc
