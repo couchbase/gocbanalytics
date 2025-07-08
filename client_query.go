@@ -220,79 +220,81 @@ func translateClientError(err error) error {
 		return err
 	}
 
-	if clientErr.HTTPResponseCode == 401 {
-		return newAnalyticsError(clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode).
-			withMessage(clientErr.InnerError.Error()).
-			withCause(ErrInvalidCredential)
-	}
-
-	if len(clientErr.Errors) > 0 {
-		var firstNonRetriableErr *analyticsErrorDesc
-
-		descs := make([]analyticsErrorDesc, len(clientErr.Errors))
-		for i, desc := range clientErr.Errors {
-			descs[i] = analyticsErrorDesc{
-				Code:    desc.Code,
-				Message: desc.Message,
-			}
-
-			if firstNonRetriableErr == nil && !desc.Retry {
-				firstNonRetriableErr = &descs[i]
-			}
-		}
-
-		var code int
-
-		var msg string
-
-		if firstNonRetriableErr == nil {
-			code = int(clientErr.Errors[0].Code)
-			msg = clientErr.Errors[0].Message
-		} else {
-			code = int(firstNonRetriableErr.Code)
-			msg = firstNonRetriableErr.Message
-		}
-
-		if code == 20000 {
-			return newAnalyticsError(clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode).
-				withErrors(descs).
-				withCause(ErrInvalidCredential)
-		}
-
-		if code == 21002 {
-			return newAnalyticsError(clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode).
-				withErrors(descs).
-				withCause(ErrTimeout)
-		}
-
-		qErr := newQueryError(clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode, code, msg).
-			withErrors(descs)
+	if len(clientErr.Errors) == 0 {
+		var baseErr error
 
 		switch {
-		case errors.Is(clientErr.InnerError, httpqueryclient.ErrTimeout):
-			qErr.cause.cause = ErrTimeout
-		case errors.Is(clientErr.InnerError, context.Canceled):
-			qErr.cause.cause = context.Canceled
-		case errors.Is(clientErr.InnerError, context.DeadlineExceeded):
-			qErr.cause.cause = context.DeadlineExceeded
+		case errors.Is(err, httpqueryclient.ErrInvalidCredential):
+			baseErr = ErrInvalidCredential
+		case errors.Is(err, httpqueryclient.ErrServiceUnavailable):
+			baseErr = ErrServiceUnavailable
+		case errors.Is(err, httpqueryclient.ErrTimeout):
+			baseErr = ErrTimeout
+		case errors.Is(err, context.Canceled):
+			baseErr = context.Canceled
+		case errors.Is(err, context.DeadlineExceeded):
+			baseErr = context.DeadlineExceeded
 		}
 
-		return qErr
+		err := newAnalyticsError(clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode).
+			withMessage(clientErr.InnerError.Error())
+
+		if baseErr != nil {
+			err = err.withCause(baseErr)
+		}
+
+		return err
 	}
 
-	baseErr := newAnalyticsError(clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode).
-		withMessage(clientErr.InnerError.Error())
+	var firstNonRetriableErr *analyticsErrorDesc
+
+	descs := make([]analyticsErrorDesc, len(clientErr.Errors))
+	for i, desc := range clientErr.Errors {
+		descs[i] = analyticsErrorDesc{
+			Code:    desc.Code,
+			Message: desc.Message,
+		}
+
+		if firstNonRetriableErr == nil && !desc.Retry {
+			firstNonRetriableErr = &descs[i]
+		}
+	}
+
+	var code int
+
+	var msg string
+
+	if firstNonRetriableErr == nil {
+		code = int(clientErr.Errors[0].Code)
+		msg = clientErr.Errors[0].Message
+	} else {
+		code = int(firstNonRetriableErr.Code)
+		msg = firstNonRetriableErr.Message
+	}
+
+	switch code {
+	case 20000:
+		return newQueryError(ErrInvalidCredential, clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode, code, msg).
+			withErrors(descs)
+	case 21002:
+		return newQueryError(ErrTimeout, clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode, code, msg).
+			withErrors(descs)
+	case 23000:
+		return newQueryError(ErrServiceUnavailable, clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode, code, msg).
+			withErrors(descs)
+	}
+
+	qErr := newQueryError(nil, clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode, code, msg).
+		withErrors(descs)
 
 	switch {
 	case errors.Is(clientErr.InnerError, httpqueryclient.ErrTimeout):
-		baseErr.cause = ErrTimeout
+		qErr.cause.cause = ErrTimeout
 	case errors.Is(clientErr.InnerError, context.Canceled):
-		baseErr.cause = context.Canceled
+		qErr.cause.cause = context.Canceled
 	case errors.Is(clientErr.InnerError, context.DeadlineExceeded):
-		baseErr.cause = context.DeadlineExceeded
-	default:
-		baseErr.cause = errors.New(err.Error()) // nolint: err113
+		qErr.cause.cause = context.DeadlineExceeded
 	}
 
-	return baseErr
+	return qErr
 }

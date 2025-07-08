@@ -24,6 +24,9 @@ var (
 
 	// ErrInvalidCredential occurs when an invalid set of credentials is provided for a service.
 	ErrInvalidCredential = errors.New("an invalid set of credentials was provided")
+
+	// ErrServiceUnavailable occurs when the Analytics service, or a part of the system in the path to it, is unavailable.
+	ErrServiceUnavailable = errors.New("service unavailable")
 )
 
 // ErrorDesc represents specific Analytics error data.
