@@ -62,7 +62,7 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 
 	addrs, err := c.resolver.LookupHost(ctx, c.host)
 	if err != nil {
-		return nil, newAnalyticsError(newObfuscateErrorWrapper("failed to lookup host", err), statement, c.host, 0)
+		return nil, newAnalyticsError(fmt.Errorf("failed to lookup host: %w", err), statement, c.host, 0)
 	}
 
 	for {
@@ -113,7 +113,12 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 			}
 
 			addrs = append(addrs[:idx], addrs[idx+1:]...)
-			lastRootErr = newObfuscateErrorWrapper("failed to send request", err)
+
+			if connectDoneErr == nil {
+				lastRootErr = newObfuscateErrorWrapper("failed to send request", err)
+			} else {
+				lastRootErr = connectDoneErr
+			}
 
 			body = newBody
 			retries++

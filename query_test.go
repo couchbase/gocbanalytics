@@ -3,6 +3,7 @@ package cbanalytics_test
 import (
 	"context"
 	"errors"
+	"net"
 	"reflect"
 	"testing"
 	"time"
@@ -224,6 +225,29 @@ func TestUnmarshaler(t *testing.T) {
 			err = row.ContentAs(&val)
 			require.ErrorIs(tt, err, unmarshaler.Err)
 		}
+	})
+}
+
+func TestDNSLookupError(t *testing.T) {
+	cluster, err := cbanalytics.NewCluster("http://imnotarealboy",
+		cbanalytics.NewBasicAuthCredential(TestOpts.Username, TestOpts.Password),
+		DefaultOptions(),
+	)
+	require.NoError(t, err)
+	defer func(cluster *cbanalytics.Cluster) {
+		err := cluster.Close()
+		assert.NoError(t, err)
+	}(cluster)
+
+	ExecuteQueryAgainst(t, []Queryable{cluster, cluster.Database(TestOpts.Database).Scope(TestOpts.Scope)}, func(tt *testing.T, queryable Queryable) {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		_, err := queryable.ExecuteQuery(ctx, "SELECT 123;")
+
+		var netErr *net.DNSError
+
+		require.ErrorAs(tt, err, &netErr)
 	})
 }
 
