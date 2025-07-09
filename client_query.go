@@ -22,31 +22,37 @@ type queryClientNamespace struct {
 	Scope    string
 }
 type httpQueryClient struct {
-	credential                Credential
-	client                    *httpqueryclient.Client
+	credential Credential
+	client     *httpqueryclient.Client
+	namespace  *queryClientNamespace
+	logger     Logger
+
 	defaultServerQueryTimeout time.Duration
 	defaultUnmarshaler        Unmarshaler
-	namespace                 *queryClientNamespace
-	logger                    Logger
+	defaultMaxRetries         uint32
 }
 
 type httpQueryClientConfig struct {
-	Credential                Credential
-	Client                    *httpqueryclient.Client
+	Credential Credential
+	Client     *httpqueryclient.Client
+	Namespace  *queryClientNamespace
+	Logger     Logger
+
 	DefaultServerQueryTimeout time.Duration
 	DefaultUnmarshaler        Unmarshaler
-	Namespace                 *queryClientNamespace
-	Logger                    Logger
+	DefaultMaxRetries         uint32
 }
 
 func newHTTPQueryClient(cfg httpQueryClientConfig) *httpQueryClient {
 	return &httpQueryClient{
-		credential:                cfg.Credential,
-		client:                    cfg.Client,
+		credential: cfg.Credential,
+		client:     cfg.Client,
+		namespace:  cfg.Namespace,
+		logger:     cfg.Logger,
+
 		defaultServerQueryTimeout: cfg.DefaultServerQueryTimeout,
 		defaultUnmarshaler:        cfg.DefaultUnmarshaler,
-		namespace:                 cfg.Namespace,
-		logger:                    cfg.Logger,
+		defaultMaxRetries:         cfg.DefaultMaxRetries,
 	}
 }
 
@@ -147,9 +153,15 @@ func (c *httpQueryClient) translateQueryOptions(ctx context.Context, statement s
 		}
 	}
 
+	maxRetries := c.defaultMaxRetries
+	if opts.MaxRetries != nil {
+		maxRetries = *opts.MaxRetries
+	}
+
 	return &httpqueryclient.QueryOptions{
 		Payload:            execOpts,
 		CredentialProvider: credentialProvider,
+		MaxRetries:         maxRetries,
 	}, nil
 }
 
@@ -236,7 +248,7 @@ func translateClientError(err error) error {
 			baseErr = context.DeadlineExceeded
 		}
 
-		return newAnalyticsError(baseErr, clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode).
+		return newAnalyticsError(baseErr, clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode, clientErr.Retries).
 			withMessage(clientErr.InnerError.Error())
 	}
 
@@ -268,17 +280,49 @@ func translateClientError(err error) error {
 
 	switch code {
 	case 20000:
-		return newQueryError(ErrInvalidCredential, clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode, code, msg).
+		return newQueryError(
+			ErrInvalidCredential,
+			clientErr.Statement,
+			clientErr.Endpoint,
+			clientErr.HTTPResponseCode,
+			code,
+			msg,
+			clientErr.Retries,
+		).
 			withErrors(descs)
 	case 21002:
-		return newQueryError(ErrTimeout, clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode, code, msg).
+		return newQueryError(
+			ErrTimeout,
+			clientErr.Statement,
+			clientErr.Endpoint,
+			clientErr.HTTPResponseCode,
+			code,
+			msg,
+			clientErr.Retries,
+		).
 			withErrors(descs)
 	case 23000:
-		return newQueryError(ErrServiceUnavailable, clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode, code, msg).
+		return newQueryError(
+			ErrServiceUnavailable,
+			clientErr.Statement,
+			clientErr.Endpoint,
+			clientErr.HTTPResponseCode,
+			code,
+			msg,
+			clientErr.Retries,
+		).
 			withErrors(descs)
 	}
 
-	qErr := newQueryError(nil, clientErr.Statement, clientErr.Endpoint, clientErr.HTTPResponseCode, code, msg).
+	qErr := newQueryError(
+		nil,
+		clientErr.Statement,
+		clientErr.Endpoint,
+		clientErr.HTTPResponseCode,
+		code,
+		msg,
+		clientErr.Retries,
+	).
 		withErrors(descs)
 
 	switch {

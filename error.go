@@ -61,9 +61,10 @@ type AnalyticsError struct {
 	statement        string
 	endpoint         string
 	httpResponseCode int
+	retries          uint32
 }
 
-func newAnalyticsError(cause error, statement, endpoint string, statusCode int) AnalyticsError {
+func newAnalyticsError(cause error, statement, endpoint string, statusCode int, retries uint32) AnalyticsError {
 	if cause == nil {
 		cause = ErrAnalytics
 	}
@@ -75,6 +76,7 @@ func newAnalyticsError(cause error, statement, endpoint string, statusCode int) 
 		endpoint:         endpoint,
 		message:          "",
 		httpResponseCode: statusCode,
+		retries:          retries,
 	}
 }
 
@@ -92,12 +94,14 @@ func (e AnalyticsError) Error() string {
 		Message          string               `json:"message,omitempty"`
 		Endpoint         string               `json:"endpoint,omitempty"`
 		HTTPResponseCode int                  `json:"status_code,omitempty"`
+		Retries          uint32               `json:"retries,omitempty"`
 	}{
 		Statement:        e.statement,
 		Errors:           e.errors,
 		Message:          e.message,
 		Endpoint:         e.endpoint,
 		HTTPResponseCode: e.httpResponseCode,
+		Retries:          e.retries,
 	})
 
 	return e.cause.Error() + " | " + string(errBytes)
@@ -147,7 +151,7 @@ func (e QueryError) withErrors(errors []analyticsErrorDesc) *QueryError {
 }
 
 // nolint: unused
-func newQueryError(cause error, statement, endpoint string, statusCode int, code int, message string) QueryError {
+func newQueryError(cause error, statement, endpoint string, statusCode int, code int, message string, retries uint32) QueryError {
 	if cause == nil {
 		cause = ErrQuery
 	}
@@ -160,6 +164,7 @@ func newQueryError(cause error, statement, endpoint string, statusCode int, code
 			endpoint:         endpoint,
 			message:          "",
 			httpResponseCode: statusCode,
+			retries:          retries,
 		},
 		code:    code,
 		message: message,

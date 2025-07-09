@@ -62,12 +62,14 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 
 	addrs, err := c.resolver.LookupHost(ctx, c.host)
 	if err != nil {
-		return nil, newAnalyticsError(fmt.Errorf("failed to lookup host: %w", err), statement, c.host, 0)
+		return nil, newAnalyticsError(fmt.Errorf("failed to lookup host: %w", err), statement, c.host, 0, retries)
 	}
 
 	for {
-		if len(addrs) == 0 {
-			return nil, newAnalyticsError(lastRootErr, statement, c.host, 0).withLastDetail(lastCode, lastMessage)
+		// We use > here as this check is at the top of the loop, so we want to allow the nth retry to be made.
+		if retries > opts.MaxRetries {
+			// This could be a query error or a platform error, either way we don't wrap it in an analytics error.
+			return nil, lastRootErr
 		}
 
 		idx := rand.Intn(len(addrs))
@@ -103,16 +105,14 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 			// We don't want to bail out on connection errors as they may be because of dial timeout.
 			if connectDoneErr == nil {
 				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-					return nil, newAnalyticsError(err, statement, c.host, 0)
+					return nil, newAnalyticsError(err, statement, c.host, 0, retries).withLastDetail(lastCode, lastMessage)
 				}
 			}
 
-			newBody, notRetriableErr := handleMaybeRetryAnalytics(ctxDeadline, serverDeadline, backoff, retries, opts.Payload)
+			newBody, notRetriableErr := c.handleMaybeRetry(uniqueID, ctxDeadline, serverDeadline, backoff, retries, opts.Payload)
 			if notRetriableErr != nil {
-				return nil, newAnalyticsError(notRetriableErr, statement, c.host, 0).withLastDetail(lastCode, lastMessage)
+				return nil, newAnalyticsError(notRetriableErr, statement, c.host, 0, retries).withLastDetail(lastCode, lastMessage)
 			}
-
-			addrs = append(addrs[:idx], addrs[idx+1:]...)
 
 			if connectDoneErr == nil {
 				lastRootErr = newObfuscateErrorWrapper("failed to send request", err)
@@ -133,10 +133,11 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 			respBody, readErr := io.ReadAll(resp.Body)
 			if readErr != nil {
 				return nil, newAnalyticsError(newObfuscateErrorWrapper("failed to read response body", readErr), statement,
-					c.host, resp.StatusCode)
+					c.host, resp.StatusCode, retries).
+					withErrorText(string(respBody))
 			}
 
-			cErr := parseAnalyticsErrorResponse(respBody, statement, c.host, resp.StatusCode, lastCode, lastMessage)
+			cErr := parseAnalyticsErrorResponse(respBody, statement, c.host, resp.StatusCode, lastCode, lastMessage, retries)
 			if cErr != nil {
 				first, retriable := isAnalyticsErrorRetriable(cErr)
 				if !retriable {
@@ -150,9 +151,9 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 					lastMessage = first.Message
 				}
 
-				newBody, err := handleMaybeRetryAnalytics(ctxDeadline, serverDeadline, backoff, retries, opts.Payload)
+				newBody, err := c.handleMaybeRetry(uniqueID, ctxDeadline, serverDeadline, backoff, retries, opts.Payload)
 				if err != nil {
-					return nil, newAnalyticsError(err, statement, c.host, resp.StatusCode).
+					return nil, newAnalyticsError(err, statement, c.host, resp.StatusCode, retries).
 						withErrors(cErr.Errors).
 						withErrorText(string(respBody)).
 						withLastDetail(lastCode, lastMessage)
@@ -168,7 +169,8 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 				errors.New("query returned non-200 status code but no errors in body"), //nolint:err113
 				statement,
 				c.host,
-				resp.StatusCode).
+				resp.StatusCode,
+				retries).
 				withErrorText(string(respBody)).
 				withLastDetail(lastCode, lastMessage)
 		}
@@ -183,7 +185,8 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 			return nil, newAnalyticsError(newObfuscateErrorWrapper("failed to parse success response body", readErr),
 				statement,
 				c.host,
-				resp.StatusCode).
+				resp.StatusCode,
+				retries).
 				withErrorText(string(respBody)).
 				withLastDetail(lastCode, lastMessage)
 		}
@@ -195,7 +198,9 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 				return nil, newAnalyticsError(err,
 					statement,
 					c.host,
-					resp.StatusCode)
+					resp.StatusCode,
+					retries).
+					withLastDetail(lastCode, lastMessage)
 			}
 
 			meta, metaErr := streamer.MetaData()
@@ -203,10 +208,13 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 				return nil, newAnalyticsError(metaErr,
 					statement,
 					c.host,
-					resp.StatusCode)
+					resp.StatusCode,
+					retries).
+					withErrorText(string(meta)).
+					withLastDetail(lastCode, lastMessage)
 			}
 
-			cErr := parseAnalyticsErrorResponse(meta, statement, c.host, resp.StatusCode, lastCode, lastMessage)
+			cErr := parseAnalyticsErrorResponse(meta, statement, c.host, resp.StatusCode, lastCode, lastMessage, retries)
 			if cErr != nil {
 				first, retriable := isAnalyticsErrorRetriable(cErr)
 				if !retriable {
@@ -220,9 +228,9 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 					lastMessage = first.Message
 				}
 
-				newBody, err := handleMaybeRetryAnalytics(ctxDeadline, serverDeadline, backoff, retries, opts.Payload)
+				newBody, err := c.handleMaybeRetry(uniqueID, ctxDeadline, serverDeadline, backoff, retries, opts.Payload)
 				if err != nil {
-					return nil, newAnalyticsError(err, statement, c.host, resp.StatusCode).
+					return nil, newAnalyticsError(err, statement, c.host, resp.StatusCode, retries).
 						withErrors(cErr.Errors).
 						withErrorText(string(meta)).
 						withLastDetail(lastCode, lastMessage)
@@ -245,23 +253,67 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 	}
 }
 
-func parseAnalyticsErrorResponse(respBody []byte, statement, endpoint string, statusCode int, lastCode uint32, lastMsg string) *QueryError {
+// Note in the interest of keeping this signature sane, we return a raw base error here.
+func (c *Client) handleMaybeRetry(reqID string, ctxDeadline time.Time, serverDeadline time.Time, calc backoffCalculator,
+	retries uint32, payload map[string]interface{}) ([]byte, error) {
+	b := calc(retries)
+
+	var body []byte
+
+	if !ctxDeadline.IsZero() {
+		now := time.Now()
+		if now.Add(b).After(ctxDeadline) {
+			return nil, ErrContextDeadlineWouldBeExceeded
+		}
+	}
+
+	if !serverDeadline.IsZero() {
+		serverTimeout := serverDeadline.Sub(time.Now().Add(b))
+
+		if serverTimeout < 0 {
+			return nil, ErrTimeout
+		}
+
+		payload["timeout"] = serverTimeout.String()
+
+		payloadBody, err := json.Marshal(payload)
+		if err != nil {
+			return nil, newObfuscateErrorWrapper("failed to marshal payload after updating timeout", err)
+		}
+
+		body = payloadBody
+	}
+
+	c.logger.Trace("Retrying request %s in %s, retries: %d", reqID, b, retries)
+
+	time.Sleep(b)
+
+	return body, nil
+}
+
+func parseAnalyticsErrorResponse(respBody []byte, statement, endpoint string, statusCode int, lastCode uint32, lastMsg string, retries uint32) *QueryError {
 	if statusCode == 401 {
-		return newAnalyticsError(ErrInvalidCredential, statement, endpoint, statusCode)
+		return newAnalyticsError(ErrInvalidCredential, statement, endpoint, statusCode, retries)
 	}
 
 	var rawRespParse jsonAnalyticsErrorResponse
 
 	parseErr := json.Unmarshal(respBody, &rawRespParse)
 	if parseErr != nil {
-		return newAnalyticsError(newObfuscateErrorWrapper("failed to parse response errors", parseErr), statement, endpoint, statusCode).
+		return newAnalyticsError(
+			newObfuscateErrorWrapper("failed to parse response errors", parseErr),
+			statement,
+			endpoint,
+			statusCode,
+			retries,
+		).
 			withLastDetail(lastCode, lastMsg).
 			withErrorText(string(respBody))
 	}
 
 	if len(rawRespParse.Errors) == 0 {
 		if statusCode == 503 {
-			return newAnalyticsError(ErrServiceUnavailable, statement, endpoint, statusCode)
+			return newAnalyticsError(ErrServiceUnavailable, statement, endpoint, statusCode, retries)
 		}
 
 		return nil
@@ -271,7 +323,13 @@ func parseAnalyticsErrorResponse(respBody []byte, statement, endpoint string, st
 
 	parseErr = json.Unmarshal(rawRespParse.Errors, &respParse)
 	if parseErr != nil {
-		return newAnalyticsError(newObfuscateErrorWrapper("failed to parse response errors", parseErr), statement, endpoint, statusCode).
+		return newAnalyticsError(
+			newObfuscateErrorWrapper("failed to parse response errors", parseErr),
+			statement,
+			endpoint,
+			statusCode,
+			retries,
+		).
 			withLastDetail(lastCode, lastMsg).
 			withErrorText(string(respBody))
 	}
@@ -289,7 +347,7 @@ func parseAnalyticsErrorResponse(respBody []byte, statement, endpoint string, st
 		}
 	}
 
-	return newAnalyticsError(ErrAnalytics, statement, endpoint, statusCode).
+	return newAnalyticsError(ErrAnalytics, statement, endpoint, statusCode, retries).
 		withLastDetail(lastCode, lastMsg).
 		withErrorText(string(respBody)).
 		withErrors(errDescs)
@@ -332,41 +390,6 @@ func isAnalyticsErrorRetriable(cErr *QueryError) (*ErrorDesc, bool) {
 	}
 
 	return first, true
-}
-
-// Note in the interest of keeping this signature sane, we return a raw base error here.
-func handleMaybeRetryAnalytics(ctxDeadline time.Time, serverDeadline time.Time, calc backoffCalculator,
-	retries uint32, payload map[string]interface{}) ([]byte, error) {
-	b := calc(retries)
-
-	var body []byte
-
-	if !ctxDeadline.IsZero() {
-		if time.Now().Add(b).After(ctxDeadline.Add(-b)) {
-			return nil, ErrContextDeadlineWouldBeExceeded
-		}
-	}
-
-	if !serverDeadline.IsZero() {
-		serverTimeout := serverDeadline.Sub(time.Now().Add(b))
-
-		if serverTimeout < 0 {
-			return nil, ErrTimeout
-		}
-
-		payload["timeout"] = serverTimeout.String()
-
-		payloadBody, err := json.Marshal(payload)
-		if err != nil {
-			return nil, newObfuscateErrorWrapper("failed to marshal payload after updating timeout", err)
-		}
-
-		body = payloadBody
-	}
-
-	time.Sleep(b)
-
-	return body, nil
 }
 
 type backoffCalculator func(retryAttempts uint32) time.Duration

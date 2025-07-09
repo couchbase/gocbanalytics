@@ -32,6 +32,7 @@ type clusterClientOptions struct {
 	Address                              address
 	Unmarshaler                          Unmarshaler
 	Logger                               Logger
+	MaxRetries                           uint32
 }
 
 func newClusterClient(opts clusterClientOptions) (clusterClient, error) {
@@ -45,6 +46,7 @@ type httpClusterClient struct {
 	serverQueryTimeout time.Duration
 	unmarshaler        Unmarshaler
 	logger             Logger
+	maxRetries         uint32
 }
 
 func newHTTPClusterClient(opts clusterClientOptions) (*httpClusterClient, error) {
@@ -93,8 +95,9 @@ func newHTTPClusterClient(opts clusterClientOptions) (*httpClusterClient, error)
 	}
 
 	clientOpts := httpqueryclient.ClientConfig{
-		TLSConfig: createTLSConfig(opts.Address.Host, pool),
-		Logger:    opts.Logger,
+		TLSConfig:      createTLSConfig(opts.Address.Host, pool),
+		Logger:         opts.Logger,
+		ConnectTimeout: opts.ConnectTimeout,
 	}
 
 	client := httpqueryclient.NewClient(opts.Scheme, opts.Address.Host, opts.Address.Port, clientOpts)
@@ -105,6 +108,7 @@ func newHTTPClusterClient(opts clusterClientOptions) (*httpClusterClient, error)
 		serverQueryTimeout: opts.ServerQueryTimeout,
 		unmarshaler:        opts.Unmarshaler,
 		logger:             opts.Logger,
+		maxRetries:         opts.MaxRetries,
 	}, nil
 }
 
@@ -116,6 +120,7 @@ func (c *httpClusterClient) Database(name string) databaseClient {
 		DefaultServerTimeout: c.serverQueryTimeout,
 		DefaultUnmarshaler:   c.unmarshaler,
 		Logger:               c.logger,
+		DefaultMaxRetries:    c.maxRetries,
 	})
 }
 
@@ -127,6 +132,7 @@ func (c *httpClusterClient) QueryClient() queryClient {
 		DefaultUnmarshaler:        c.unmarshaler,
 		Namespace:                 nil,
 		Logger:                    c.logger,
+		DefaultMaxRetries:         c.maxRetries,
 	})
 }
 

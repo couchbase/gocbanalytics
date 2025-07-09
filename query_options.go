@@ -32,6 +32,11 @@ type QueryOptions struct {
 
 	// Unmarshaler specifies the default unmarshaler to use for decoding rows from this query.
 	Unmarshaler Unmarshaler
+
+	// MaxRetries specifies the maximum number of retries that a query will be attempted.
+	// This includes connection attempts.
+	// VOLATILE: This API is subject to change at any time.
+	MaxRetries *uint32
 }
 
 // NewQueryOptions creates a new instance of QueryOptions.
@@ -44,6 +49,7 @@ func NewQueryOptions() *QueryOptions {
 		ScanConsistency:      nil,
 		Raw:                  nil,
 		Unmarshaler:          nil,
+		MaxRetries:           nil,
 	}
 }
 
@@ -91,6 +97,14 @@ func (opts *QueryOptions) SetRaw(raw map[string]interface{}) *QueryOptions {
 // SetUnmarshaler sets the Unmarshaler field in QueryOptions.
 func (opts *QueryOptions) SetUnmarshaler(unmarshaler Unmarshaler) *QueryOptions {
 	opts.Unmarshaler = unmarshaler
+
+	return opts
+}
+
+// SetMaxRetries sets the MaxRetries field in QueryOptions.
+// VOLATILE: This API is subject to change at any time.
+func (opts *QueryOptions) SetMaxRetries(maxRetries uint32) *QueryOptions {
+	opts.MaxRetries = &maxRetries
 
 	return opts
 }

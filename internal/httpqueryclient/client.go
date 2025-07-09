@@ -14,8 +14,9 @@ import (
 
 // ClientConfig holds the configuration for the client.
 type ClientConfig struct {
-	TLSConfig *tls.Config
-	Logger    logging.Logger
+	TLSConfig      *tls.Config
+	Logger         logging.Logger
+	ConnectTimeout time.Duration
 }
 
 // Client represents an HTTP client that can be used to make requests to the server.
@@ -30,7 +31,7 @@ type Client struct {
 
 // NewClient creates a new Client with the given endpoint and configuration.
 func NewClient(scheme string, host string, port int, config ClientConfig) *Client {
-	client, resolver := createHTTPClient(config.TLSConfig)
+	client, resolver := createHTTPClient(config.TLSConfig, config.ConnectTimeout)
 
 	return &Client{
 		scheme:      scheme,
@@ -51,11 +52,11 @@ func (c *Client) Close() error {
 	return nil
 }
 
-func createHTTPClient(tlsConfig *tls.Config) (*http.Client, *net.Resolver) {
+func createHTTPClient(tlsConfig *tls.Config, connectTimeout time.Duration) (*http.Client, *net.Resolver) {
 	resolver := net.DefaultResolver
 
 	httpDialer := &net.Dialer{ //nolint:exhaustruct
-		Timeout:   10 * time.Second,
+		Timeout:   connectTimeout,
 		KeepAlive: 30 * time.Second,
 		Resolver:  resolver,
 	}

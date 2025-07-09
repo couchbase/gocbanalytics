@@ -12,21 +12,25 @@ type databaseClient interface {
 }
 
 type httpDatabaseClient struct {
-	credential                Credential
-	client                    *httpqueryclient.Client
-	name                      string
+	credential Credential
+	client     *httpqueryclient.Client
+	name       string
+	logger     Logger
+
 	defaultServerQueryTimeout time.Duration
 	defaultUnmarshaler        Unmarshaler
-	logger                    Logger
+	defaultMaxRetries         uint32
 }
 
 type httpDatabaseClientConfig struct {
-	Credential           Credential
-	Client               *httpqueryclient.Client
-	Name                 string
+	Credential Credential
+	Client     *httpqueryclient.Client
+	Name       string
+	Logger     Logger
+
 	DefaultServerTimeout time.Duration
 	DefaultUnmarshaler   Unmarshaler
-	Logger               Logger
+	DefaultMaxRetries    uint32
 }
 
 func newHTTPDatabaseClient(cfg httpDatabaseClientConfig) *httpDatabaseClient {
@@ -37,6 +41,7 @@ func newHTTPDatabaseClient(cfg httpDatabaseClientConfig) *httpDatabaseClient {
 		defaultServerQueryTimeout: cfg.DefaultServerTimeout,
 		defaultUnmarshaler:        cfg.DefaultUnmarshaler,
 		logger:                    cfg.Logger,
+		defaultMaxRetries:         cfg.DefaultMaxRetries,
 	}
 }
 
@@ -46,12 +51,14 @@ func (c *httpDatabaseClient) Name() string {
 
 func (c *httpDatabaseClient) Scope(name string) scopeClient {
 	return newHTTPScopeClient(httpScopeClientConfig{
-		Credential:                c.credential,
-		Client:                    c.client,
-		DatabaseName:              c.name,
-		Name:                      name,
+		Credential:   c.credential,
+		Client:       c.client,
+		DatabaseName: c.name,
+		Name:         name,
+		Logger:       c.logger,
+
 		DefaultServerQueryTimeout: c.defaultServerQueryTimeout,
 		DefaultUnmarshaler:        c.defaultUnmarshaler,
-		Logger:                    c.logger,
+		DefaultMaxRetries:         c.defaultMaxRetries,
 	})
 }
