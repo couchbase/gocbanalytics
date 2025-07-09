@@ -62,9 +62,10 @@ type QueryError struct {
 	Endpoint         string
 	ErrorText        string
 	HTTPResponseCode int
+	Retries          uint32
 }
 
-func newAnalyticsError(innerError error, statement string, endpoint string, responseCode int) *QueryError {
+func newAnalyticsError(innerError error, statement string, endpoint string, responseCode int, retries uint32) *QueryError {
 	return &QueryError{
 		InnerError:       innerError,
 		Statement:        statement,
@@ -74,6 +75,7 @@ func newAnalyticsError(innerError error, statement string, endpoint string, resp
 		Endpoint:         endpoint,
 		ErrorText:        "",
 		HTTPResponseCode: responseCode,
+		Retries:          retries,
 	}
 }
 

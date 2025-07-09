@@ -168,6 +168,23 @@ func NewCluster(httpEndpoint string, credential Credential, opts ...*ClusterOpti
 		logger.Warn("server certificate verification is disabled, this is insecure")
 	}
 
+	var maxRetries uint32 = 7
+	if clusterOpts.MaxRetries != nil {
+		maxRetries = *clusterOpts.MaxRetries
+	}
+
+	if valStr, ok := fetchOption("max_retries"); ok {
+		m, err := strconv.Atoi(valStr)
+		if err != nil {
+			return nil, invalidArgumentError{
+				ArgumentName: "max_retries",
+				Reason:       err.Error(),
+			}
+		}
+
+		maxRetries = uint32(m)
+	}
+
 	mgr, err := newClusterClient(clusterClientOptions{
 		Scheme:                               connSpec.Scheme,
 		Credential:                           credential,
@@ -178,6 +195,7 @@ func NewCluster(httpEndpoint string, credential Credential, opts ...*ClusterOpti
 		Address:                              addr,
 		Unmarshaler:                          unmarshaler,
 		Logger:                               logger,
+		MaxRetries:                           maxRetries,
 	})
 	if err != nil {
 		return nil, err

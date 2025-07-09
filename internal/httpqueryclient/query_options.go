@@ -7,4 +7,7 @@ type QueryOptions struct {
 
 	// CredentialProvider is a function that returns the username and password for authentication.
 	CredentialProvider func() (string, string)
+
+	// MaxRetries specifies the maximum number of retries that a query will be attempted.
+	MaxRetries uint32
 }

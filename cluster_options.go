@@ -127,6 +127,11 @@ type ClusterOptions struct {
 
 	// Logger specifies the logger to use for logging.
 	Logger Logger
+
+	// MaxRetries specifies the maximum number of retries that a query will be attempted.
+	// This includes connection attempts.
+	// VOLATILE: This API is subject to change at any time.
+	MaxRetries *uint32
 }
 
 // NewClusterOptions creates a new instance of ClusterOptions.
@@ -142,6 +147,7 @@ func NewClusterOptions() *ClusterOptions {
 		},
 		Unmarshaler: nil,
 		Logger:      nil,
+		MaxRetries:  nil,
 	}
 }
 
@@ -173,12 +179,21 @@ func (co *ClusterOptions) SetLogger(logger Logger) *ClusterOptions {
 	return co
 }
 
+// SetMaxRetries sets the MaxRetries field in ClusterOptions.
+// VOLATILE: This API is subject to change at any time.
+func (co *ClusterOptions) SetMaxRetries(maxRetries uint32) *ClusterOptions {
+	co.MaxRetries = &maxRetries
+
+	return co
+}
+
 func mergeClusterOptions(opts ...*ClusterOptions) *ClusterOptions {
 	clusterOpts := &ClusterOptions{
 		TimeoutOptions:  nil,
 		SecurityOptions: nil,
 		Unmarshaler:     nil,
 		Logger:          nil,
+		MaxRetries:      nil,
 	}
 
 	for _, opt := range opts {
@@ -226,6 +241,10 @@ func mergeClusterOptions(opts ...*ClusterOptions) *ClusterOptions {
 
 		if opt.Logger != nil {
 			clusterOpts.Logger = opt.Logger
+		}
+
+		if opt.MaxRetries != nil {
+			clusterOpts.MaxRetries = opt.MaxRetries
 		}
 	}
 

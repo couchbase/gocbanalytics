@@ -39,6 +39,7 @@ func mergeQueryOptions(opts ...*QueryOptions) *QueryOptions {
 		ScanConsistency:      nil,
 		Raw:                  nil,
 		Unmarshaler:          nil,
+		MaxRetries:           nil,
 	}
 
 	for _, opt := range opts {
@@ -72,6 +73,10 @@ func mergeQueryOptions(opts ...*QueryOptions) *QueryOptions {
 
 		if opt.Unmarshaler != nil {
 			queryOpts.Unmarshaler = opt.Unmarshaler
+		}
+
+		if opt.MaxRetries != nil {
+			queryOpts.MaxRetries = opt.MaxRetries
 		}
 	}
 

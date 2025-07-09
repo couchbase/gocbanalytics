@@ -33,7 +33,7 @@ func (q *QueryRowReader) Err() error {
 		return metaErr
 	}
 
-	cErr := parseAnalyticsErrorResponse(meta, q.statement, q.endpoint, q.statusCode, 0, "")
+	cErr := parseAnalyticsErrorResponse(meta, q.statement, q.endpoint, q.statusCode, 0, "", 0)
 	if cErr != nil {
 		return cErr
 	}

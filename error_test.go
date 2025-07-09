@@ -8,7 +8,7 @@ import (
 )
 
 func TestQueryErrorAsAnalyticsError(t *testing.T) {
-	err := newQueryError(nil, "select *", "endpoint", 200, 23, "message")
+	err := newQueryError(nil, "select *", "endpoint", 200, 23, "message", 0)
 
 	var analyticsError *AnalyticsError
 
@@ -16,13 +16,13 @@ func TestQueryErrorAsAnalyticsError(t *testing.T) {
 }
 
 func TestQueryErrorIsErrQuery(t *testing.T) {
-	err := newQueryError(nil, "select *", "endpoint", 200, 23, "message")
+	err := newQueryError(nil, "select *", "endpoint", 200, 23, "message", 0)
 
 	require.ErrorIs(t, err, ErrQuery)
 }
 
 func TestQueryErrorAsQueryError(t *testing.T) {
-	err := newQueryError(nil, "select *", "endpoint", 200, 23, "message")
+	err := newQueryError(nil, "select *", "endpoint", 200, 23, "message", 0)
 
 	var queryError QueryError
 
