@@ -2,8 +2,6 @@
 
 Go client for [Couchbase](https://couchbase.com) Analytics.
 
-#### This client is currently in **developer preview** state and is not recommended for production use.
-
 ## Useful Links
 ### Documentation
 You can explore our API reference through godoc at [https://pkg.go.dev/github.com/couchbase/gocbanalytics](https://pkg.go.dev/github.com/couchbase/gocbanalytics).
