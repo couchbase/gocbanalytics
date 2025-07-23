@@ -35,14 +35,14 @@ import (
 
 func main() {
 	const (
-		connStr  = "couchbases://..."
+		connStr  = "https://..."
 		username = "..."
 		password = "..."
 	)
 	
 	cluster, err := cbanalytics.NewCluster(
 		connStr,
-		cbanalytics.NewCredential(username, password),
+		cbanalytics.NewBasicAuthCredential(username, password),
 		// The third parameter is optional.
 		// This example sets the default server query timeout to 3 minutes,
 		// that is the timeout value sent to the query server.
@@ -111,7 +111,7 @@ func handleErr(err error) {
 
 You can run tests in the usual Go way:
 
-`go test -race ./... --connstr couchbases://... --username ... --password ... --database ... --scope ...`
+`go test -race ./... --connstr https://... --username ... --password ... --database ... --scope ...`
 
 Which will execute tests against the specified Analytics instance.
 See the `testmain_test.go` file for more information on command line arguments.
