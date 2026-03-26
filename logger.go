@@ -95,17 +95,22 @@ func NewNoopLogger() *NoopLogger {
 	return &NoopLogger{}
 }
 
+// Error ignores the error level log message.
 func (n NoopLogger) Error(_ string, _ ...interface{}) {
 }
 
+// Warn ignores the warn level log message.
 func (n NoopLogger) Warn(_ string, _ ...interface{}) {
 }
 
+// Info ignores the info level log message.
 func (n NoopLogger) Info(_ string, _ ...interface{}) {
 }
 
+// Debug ignores the debug level log message.
 func (n NoopLogger) Debug(_ string, _ ...interface{}) {
 }
 
+// Trace ignores the trace level log message.
 func (n NoopLogger) Trace(_ string, _ ...interface{}) {
 }

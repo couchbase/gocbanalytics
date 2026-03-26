@@ -1,3 +1,8 @@
+// Package cbanalytics provides an SDK for interacting with Couchbase Analytics clusters.
+// The main entry point for the SDK is the Cluster struct, which allows users to perform operations on the data against
+// a Couchbase Enterprise Analytics cluster.
+// The Cluster struct is created using the NewCluster function, which takes an HTTP endpoint, a credential for
+// authentication, and optional cluster options.
 package cbanalytics
 
 import (
@@ -31,9 +36,10 @@ func NewCluster(httpEndpoint string, credential Credential, opts ...*ClusterOpti
 	var port int
 
 	if connSpec.Port() == "" {
-		if connSpec.Scheme == "https" {
+		switch connSpec.Scheme {
+		case "https":
 			port = 443
-		} else if connSpec.Scheme == "http" {
+		case "http":
 			port = 80
 		}
 	} else {
@@ -54,6 +60,23 @@ func NewCluster(httpEndpoint string, credential Credential, opts ...*ClusterOpti
 		return nil, invalidArgumentError{
 			ArgumentName: "Credential",
 			Reason:       "cannot be nil",
+		}
+	}
+
+	switch credential.(type) {
+	case *CertificateCredential:
+		if connSpec.Scheme != "https" {
+			return nil, invalidArgumentError{
+				ArgumentName: "Credential",
+				Reason:       "certificateCredential requires https scheme",
+			}
+		}
+	case *JWTCredential:
+		if connSpec.Scheme != "https" {
+			return nil, invalidArgumentError{
+				ArgumentName: "Credential",
+				Reason:       "jwtCredential requires https scheme",
+			}
 		}
 	}
 
@@ -206,6 +229,13 @@ func NewCluster(httpEndpoint string, credential Credential, opts ...*ClusterOpti
 	}
 
 	return c, nil
+}
+
+// Credential replaces the credential used for authenticating requests.
+// This can be used for credential rotation without recreating the cluster.
+// UNCOMMITTED: This API may change in the future.
+func (c *Cluster) Credential(credential Credential) {
+	c.client.SetCredential(credential)
 }
 
 // Close shuts down the cluster and releases all resources.

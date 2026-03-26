@@ -93,8 +93,9 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 		req.Host = c.host
 		req.Header = header
 
-		username, password := opts.CredentialProvider()
-		req.SetBasicAuth(username, password)
+		if opts.AuthHandler != nil {
+			opts.AuthHandler(req)
+		}
 
 		c.logger.Trace("Sending request %s to %s", uniqueID, reqURI)
 
