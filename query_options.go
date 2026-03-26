@@ -53,6 +53,7 @@ func NewQueryOptions() *QueryOptions {
 	}
 }
 
+// SetClientContextID sets the ClientContextID field in QueryOptions.
 func (opts *QueryOptions) SetClientContextID(clientContextID string) *QueryOptions {
 	opts.ClientContextID = &clientContextID
 

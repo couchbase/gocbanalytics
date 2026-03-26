@@ -13,6 +13,7 @@ import (
 type clusterClient interface {
 	QueryClient() queryClient
 	Database(name string) databaseClient
+	SetCredential(credential Credential)
 
 	Close() error
 }
@@ -42,7 +43,7 @@ func newClusterClient(opts clusterClientOptions) (clusterClient, error) {
 type httpClusterClient struct {
 	client *httpqueryclient.Client
 
-	credential         Credential
+	credentials        *credentialStore
 	serverQueryTimeout time.Duration
 	unmarshaler        Unmarshaler
 	logger             Logger
@@ -94,8 +95,26 @@ func newHTTPClusterClient(opts clusterClientOptions) (*httpClusterClient, error)
 		pool = nil
 	}
 
+	credentials := newCredentialStore(opts.Credential)
+
+	tlsConfig := createTLSConfig(opts.Address.Host, pool)
+	tlsConfig.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
+		if certCred, ok := credentials.get().(*CertificateCredential); ok && certCred.ClientCertificate != nil {
+			return certCred.ClientCertificate, nil
+		}
+
+		return &tls.Certificate{
+			Certificate:                  nil,
+			PrivateKey:                   nil,
+			SupportedSignatureAlgorithms: nil,
+			OCSPStaple:                   nil,
+			SignedCertificateTimestamps:  nil,
+			Leaf:                         nil,
+		}, nil
+	}
+
 	clientOpts := httpqueryclient.ClientConfig{
-		TLSConfig:      createTLSConfig(opts.Address.Host, pool),
+		TLSConfig:      tlsConfig,
 		Logger:         opts.Logger,
 		ConnectTimeout: opts.ConnectTimeout,
 	}
@@ -103,7 +122,7 @@ func newHTTPClusterClient(opts clusterClientOptions) (*httpClusterClient, error)
 	client := httpqueryclient.NewClient(opts.Scheme, opts.Address.Host, opts.Address.Port, clientOpts)
 
 	return &httpClusterClient{
-		credential:         opts.Credential,
+		credentials:        credentials,
 		client:             client,
 		serverQueryTimeout: opts.ServerQueryTimeout,
 		unmarshaler:        opts.Unmarshaler,
@@ -114,7 +133,7 @@ func newHTTPClusterClient(opts clusterClientOptions) (*httpClusterClient, error)
 
 func (c *httpClusterClient) Database(name string) databaseClient {
 	return newHTTPDatabaseClient(httpDatabaseClientConfig{
-		Credential:           c.credential,
+		Credentials:          c.credentials,
 		Client:               c.client,
 		Name:                 name,
 		DefaultServerTimeout: c.serverQueryTimeout,
@@ -126,7 +145,7 @@ func (c *httpClusterClient) Database(name string) databaseClient {
 
 func (c *httpClusterClient) QueryClient() queryClient {
 	return newHTTPQueryClient(httpQueryClientConfig{
-		Credential:                c.credential,
+		Credentials:               c.credentials,
 		Client:                    c.client,
 		DefaultServerQueryTimeout: c.serverQueryTimeout,
 		DefaultUnmarshaler:        c.unmarshaler,
@@ -134,6 +153,10 @@ func (c *httpClusterClient) QueryClient() queryClient {
 		Logger:                    c.logger,
 		DefaultMaxRetries:         c.maxRetries,
 	})
+}
+
+func (c *httpClusterClient) SetCredential(credential Credential) {
+	c.credentials.set(credential)
 }
 
 func (c *httpClusterClient) Close() error {
@@ -146,8 +169,6 @@ func (c *httpClusterClient) Close() error {
 }
 
 func createTLSConfig(endpoint string, pool *x509.CertPool) *tls.Config {
-	var suites []uint16
-
 	var insecureSkipVerify bool
 	if pool == nil {
 		insecureSkipVerify = true
@@ -155,7 +176,7 @@ func createTLSConfig(endpoint string, pool *x509.CertPool) *tls.Config {
 
 	return &tls.Config{ //nolint:exhaustruct
 		MinVersion:         tls.VersionTLS13,
-		CipherSuites:       suites,
+		CipherSuites:       nil,
 		RootCAs:            pool,
 		InsecureSkipVerify: insecureSkipVerify,
 		ServerName:         endpoint,
