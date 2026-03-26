@@ -1,3 +1,4 @@
+// Package logging provides a simple logging interface and a default implementation using the standard log package.
 package logging
 
 import (
@@ -44,6 +45,7 @@ type DefaultLogger struct {
 	Offset   int
 }
 
+// NewDefaultLogger creates a new DefaultLogger with the given log level and offset.
 func NewDefaultLogger(level LogLevel, offset int) *DefaultLogger {
 	return &DefaultLogger{
 		Level:    level,
@@ -52,26 +54,32 @@ func NewDefaultLogger(level LogLevel, offset int) *DefaultLogger {
 	}
 }
 
+// Error outputs an error level log message.
 func (l *DefaultLogger) Error(format string, v ...interface{}) {
 	l.Log(LogError, format, v...)
 }
 
+// Warn outputs an warn level log message.
 func (l *DefaultLogger) Warn(format string, v ...interface{}) {
 	l.Log(LogWarn, format, v...)
 }
 
+// Info outputs an info level log message.
 func (l *DefaultLogger) Info(format string, v ...interface{}) {
 	l.Log(LogInfo, format, v...)
 }
 
+// Debug outputs a debug level log message.
 func (l *DefaultLogger) Debug(format string, v ...interface{}) {
 	l.Log(LogDebug, format, v...)
 }
 
+// Trace outputs a trace level log message.
 func (l *DefaultLogger) Trace(format string, v ...interface{}) {
 	l.Log(LogTrace, format, v...)
 }
 
+// Log outputs a log message with the given log level and format.
 func (l *DefaultLogger) Log(level LogLevel, format string, v ...interface{}) {
 	if level > l.Level {
 		return

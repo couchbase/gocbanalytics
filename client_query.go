@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -22,10 +23,10 @@ type queryClientNamespace struct {
 	Scope    string
 }
 type httpQueryClient struct {
-	credential Credential
-	client     *httpqueryclient.Client
-	namespace  *queryClientNamespace
-	logger     Logger
+	credentials *credentialStore
+	client      *httpqueryclient.Client
+	namespace   *queryClientNamespace
+	logger      Logger
 
 	defaultServerQueryTimeout time.Duration
 	defaultUnmarshaler        Unmarshaler
@@ -33,10 +34,10 @@ type httpQueryClient struct {
 }
 
 type httpQueryClientConfig struct {
-	Credential Credential
-	Client     *httpqueryclient.Client
-	Namespace  *queryClientNamespace
-	Logger     Logger
+	Credentials *credentialStore
+	Client      *httpqueryclient.Client
+	Namespace   *queryClientNamespace
+	Logger      Logger
 
 	DefaultServerQueryTimeout time.Duration
 	DefaultUnmarshaler        Unmarshaler
@@ -45,10 +46,10 @@ type httpQueryClientConfig struct {
 
 func newHTTPQueryClient(cfg httpQueryClientConfig) *httpQueryClient {
 	return &httpQueryClient{
-		credential: cfg.Credential,
-		client:     cfg.Client,
-		namespace:  cfg.Namespace,
-		logger:     cfg.Logger,
+		credentials: cfg.Credentials,
+		client:      cfg.Client,
+		namespace:   cfg.Namespace,
+		logger:      cfg.Logger,
 
 		defaultServerQueryTimeout: cfg.DefaultServerQueryTimeout,
 		defaultUnmarshaler:        cfg.DefaultUnmarshaler,
@@ -113,10 +114,10 @@ func (c *httpQueryClient) translateQueryOptions(ctx context.Context, statement s
 	}
 
 	if opts.ScanConsistency != nil {
-		switch {
-		case *opts.ScanConsistency == QueryScanConsistencyNotBounded:
+		switch *opts.ScanConsistency {
+		case QueryScanConsistencyNotBounded:
 			execOpts["scan_consistency"] = "not_bounded"
-		case *opts.ScanConsistency == QueryScanConsistencyRequestPlus:
+		case QueryScanConsistencyRequestPlus:
 			execOpts["scan_consistency"] = "request_plus"
 		default:
 			return nil, invalidArgumentError{
@@ -139,17 +140,16 @@ func (c *httpQueryClient) translateQueryOptions(ctx context.Context, statement s
 
 	execOpts["statement"] = statement
 
-	var credentialProvider func() (string, string)
-	switch credential := c.credential.(type) {
-	case *BasicAuthCredential:
-		credentialProvider = func() (string, string) {
-			return credential.UserPassPair.Username, credential.UserPassPair.Password
-		}
-	case *DynamicBasicAuthCredential:
-		credentialProvider = func() (string, string) {
+	authHandler := func(req *http.Request) {
+		switch credential := c.credentials.get().(type) {
+		case *BasicAuthCredential:
+			req.SetBasicAuth(credential.UserPassPair.Username, credential.UserPassPair.Password)
+		case *DynamicBasicAuthCredential:
 			userPassPair := credential.Credentials()
-
-			return userPassPair.Username, userPassPair.Password
+			req.SetBasicAuth(userPassPair.Username, userPassPair.Password)
+		case *JWTCredential:
+			req.Header.Set("Authorization", "Bearer "+credential.Token)
+		case *CertificateCredential:
 		}
 	}
 
@@ -159,9 +159,9 @@ func (c *httpQueryClient) translateQueryOptions(ctx context.Context, statement s
 	}
 
 	return &httpqueryclient.QueryOptions{
-		Payload:            execOpts,
-		CredentialProvider: credentialProvider,
-		MaxRetries:         maxRetries,
+		Payload:     execOpts,
+		AuthHandler: authHandler,
+		MaxRetries:  maxRetries,
 	}, nil
 }
 
