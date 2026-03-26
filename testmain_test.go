@@ -26,7 +26,7 @@ type TestOptions struct {
 }
 
 func TestMain(m *testing.M) {
-	var connStr = envFlagString("CBCONNSTR", "connstr", "http://192.168.107.140",
+	var connStr = envFlagString("CBCONNSTR", "connstr", "http://192.168.107.129:8095",
 		"Connection string to run tests with")
 
 	var user = envFlagString("CBUSER", "user", "Administrator",
