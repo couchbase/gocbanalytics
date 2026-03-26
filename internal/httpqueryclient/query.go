@@ -31,9 +31,6 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 		return nil, newObfuscateErrorWrapper("failed to marshal query payload", err)
 	}
 
-	header := make(http.Header)
-	header.Set("Content-Type", "application/json")
-
 	ctxDeadline, _ := ctx.Deadline()
 
 	var serverDeadline time.Time
@@ -91,10 +88,12 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 		}
 
 		req.Host = c.host
-		req.Header = header
+		req.Header = make(http.Header)
+		req.Header.Set("Content-Type", "application/json")
 
-		username, password := opts.CredentialProvider()
-		req.SetBasicAuth(username, password)
+		if opts.AuthHandler != nil {
+			opts.AuthHandler(req)
+		}
 
 		c.logger.Trace("Sending request %s to %s", uniqueID, reqURI)
 

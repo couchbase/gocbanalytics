@@ -15,15 +15,8 @@ func EnableAll() {
 
 // ReportAll reports all leak checking.
 func ReportAll() bool {
-	testsPassed := true
+	noLeakedResponses := ReportLeakedHTTPResponses()
+	noLeakedGoroutines := ReportLeakedGoroutines()
 
-	if !ReportLeakedHTTPResponses() {
-		testsPassed = false
-	}
-
-	if !ReportLeakedGoroutines() {
-		testsPassed = false
-	}
-
-	return testsPassed
+	return noLeakedResponses && noLeakedGoroutines
 }

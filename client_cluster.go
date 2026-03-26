@@ -13,6 +13,7 @@ import (
 type clusterClient interface {
 	QueryClient() queryClient
 	Database(name string) databaseClient
+	SetCredential(credential Credential) error
 
 	Close() error
 }
@@ -42,7 +43,8 @@ func newClusterClient(opts clusterClientOptions) (clusterClient, error) {
 type httpClusterClient struct {
 	client *httpqueryclient.Client
 
-	credential         Credential
+	scheme             string
+	credentials        *credentialStore
 	serverQueryTimeout time.Duration
 	unmarshaler        Unmarshaler
 	logger             Logger
@@ -50,52 +52,77 @@ type httpClusterClient struct {
 }
 
 func newHTTPClusterClient(opts clusterClientOptions) (*httpClusterClient, error) {
-	trustOnly := opts.TrustOnly
-	if trustOnly == nil {
-		trustOnly = trustCapellaAndSystem{}
-	}
+	credentials := newCredentialStore(opts.Credential)
 
-	var pool *x509.CertPool
-	switch to := trustOnly.(type) {
-	case TrustOnlyCapella:
-		pool := x509.NewCertPool()
-		pool.AppendCertsFromPEM(capellaRootCA)
-	case TrustOnlySystem:
-		certPool, err := x509.SystemCertPool()
-		if err != nil {
-			return nil, fmt.Errorf("failed to read system cert pool %w", err)
+	var tlsConfig *tls.Config
+
+	if opts.Scheme == "https" {
+		trustOnly := opts.TrustOnly
+		if trustOnly == nil {
+			trustOnly = trustCapellaAndSystem{}
 		}
 
-		pool = certPool
-	case TrustOnlyPemFile:
-		data, err := os.ReadFile(to.Path)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read pem file %w", err)
+		var pool *x509.CertPool
+		switch to := trustOnly.(type) {
+		case TrustOnlyCapella:
+			pool = x509.NewCertPool()
+			pool.AppendCertsFromPEM(capellaRootCA)
+		case TrustOnlySystem:
+			certPool, err := x509.SystemCertPool()
+			if err != nil {
+				return nil, fmt.Errorf("failed to read system cert pool %w", err)
+			}
+
+			pool = certPool
+		case TrustOnlyPemFile:
+			data, err := os.ReadFile(to.Path)
+			if err != nil {
+				return nil, fmt.Errorf("failed to read pem file %w", err)
+			}
+
+			pool = x509.NewCertPool()
+			pool.AppendCertsFromPEM(data)
+		case TrustOnlyPemString:
+			pool = x509.NewCertPool()
+			pool.AppendCertsFromPEM([]byte(to.Pem))
+		case TrustOnlyCertificates:
+			pool = to.Certificates
+		case trustCapellaAndSystem:
+			certPool, err := x509.SystemCertPool()
+			if err != nil {
+				return nil, fmt.Errorf("failed to read system cert pool %w", err)
+			}
+
+			certPool.AppendCertsFromPEM(capellaRootCA)
+			pool = certPool
 		}
 
-		pool = x509.NewCertPool()
-		pool.AppendCertsFromPEM(data)
-	case TrustOnlyPemString:
-		pool = x509.NewCertPool()
-		pool.AppendCertsFromPEM([]byte(to.Pem))
-	case TrustOnlyCertificates:
-		pool = to.Certificates
-	case trustCapellaAndSystem:
-		certPool, err := x509.SystemCertPool()
-		if err != nil {
-			return nil, fmt.Errorf("failed to read system cert pool %w", err)
+		if opts.DisableServerCertificateVerification != nil && *opts.DisableServerCertificateVerification {
+			pool = nil
 		}
 
-		certPool.AppendCertsFromPEM(capellaRootCA)
-		pool = certPool
-	}
+		tlsConfig = createTLSConfig(opts.Address.Host, pool)
+		// Always set GetClientCertificate so that certificate auth works if the credential is changed at
+		// runtime via SetCredential. When the active credential is not a CertificateCredential an empty
+		// certificate is returned, which is the same behavior as not setting this callback at all.
+		tlsConfig.GetClientCertificate = func(*tls.CertificateRequestInfo) (*tls.Certificate, error) {
+			if certCred, ok := credentials.get().(*CertificateCredential); ok && certCred.ClientCertificate != nil {
+				return certCred.ClientCertificate, nil
+			}
 
-	if opts.DisableServerCertificateVerification != nil && *opts.DisableServerCertificateVerification {
-		pool = nil
+			return &tls.Certificate{
+				Certificate:                  nil,
+				PrivateKey:                   nil,
+				SupportedSignatureAlgorithms: nil,
+				OCSPStaple:                   nil,
+				SignedCertificateTimestamps:  nil,
+				Leaf:                         nil,
+			}, nil
+		}
 	}
 
 	clientOpts := httpqueryclient.ClientConfig{
-		TLSConfig:      createTLSConfig(opts.Address.Host, pool),
+		TLSConfig:      tlsConfig,
 		Logger:         opts.Logger,
 		ConnectTimeout: opts.ConnectTimeout,
 	}
@@ -103,7 +130,8 @@ func newHTTPClusterClient(opts clusterClientOptions) (*httpClusterClient, error)
 	client := httpqueryclient.NewClient(opts.Scheme, opts.Address.Host, opts.Address.Port, clientOpts)
 
 	return &httpClusterClient{
-		credential:         opts.Credential,
+		scheme:             opts.Scheme,
+		credentials:        credentials,
 		client:             client,
 		serverQueryTimeout: opts.ServerQueryTimeout,
 		unmarshaler:        opts.Unmarshaler,
@@ -114,7 +142,7 @@ func newHTTPClusterClient(opts clusterClientOptions) (*httpClusterClient, error)
 
 func (c *httpClusterClient) Database(name string) databaseClient {
 	return newHTTPDatabaseClient(httpDatabaseClientConfig{
-		Credential:           c.credential,
+		Credentials:          c.credentials,
 		Client:               c.client,
 		Name:                 name,
 		DefaultServerTimeout: c.serverQueryTimeout,
@@ -126,7 +154,7 @@ func (c *httpClusterClient) Database(name string) databaseClient {
 
 func (c *httpClusterClient) QueryClient() queryClient {
 	return newHTTPQueryClient(httpQueryClientConfig{
-		Credential:                c.credential,
+		Credentials:               c.credentials,
 		Client:                    c.client,
 		DefaultServerQueryTimeout: c.serverQueryTimeout,
 		DefaultUnmarshaler:        c.unmarshaler,
@@ -134,6 +162,34 @@ func (c *httpClusterClient) QueryClient() queryClient {
 		Logger:                    c.logger,
 		DefaultMaxRetries:         c.maxRetries,
 	})
+}
+
+func (c *httpClusterClient) SetCredential(credential Credential) error {
+	if credential == nil {
+		return invalidArgumentError{
+			ArgumentName: "Credential",
+			Reason:       "cannot be nil",
+		}
+	}
+
+	switch credential.(type) {
+	case *CertificateCredential:
+		if c.scheme != "https" {
+			return invalidArgumentError{
+				ArgumentName: "Credential",
+				Reason:       "certificateCredential requires https scheme",
+			}
+		}
+	case *JWTCredential:
+		if c.scheme != "https" {
+			return invalidArgumentError{
+				ArgumentName: "Credential",
+				Reason:       "jwtCredential requires https scheme",
+			}
+		}
+	}
+
+	return c.credentials.set(credential)
 }
 
 func (c *httpClusterClient) Close() error {
@@ -146,8 +202,6 @@ func (c *httpClusterClient) Close() error {
 }
 
 func createTLSConfig(endpoint string, pool *x509.CertPool) *tls.Config {
-	var suites []uint16
-
 	var insecureSkipVerify bool
 	if pool == nil {
 		insecureSkipVerify = true
@@ -155,7 +209,7 @@ func createTLSConfig(endpoint string, pool *x509.CertPool) *tls.Config {
 
 	return &tls.Config{ //nolint:exhaustruct
 		MinVersion:         tls.VersionTLS13,
-		CipherSuites:       suites,
+		CipherSuites:       nil,
 		RootCAs:            pool,
 		InsecureSkipVerify: insecureSkipVerify,
 		ServerName:         endpoint,
