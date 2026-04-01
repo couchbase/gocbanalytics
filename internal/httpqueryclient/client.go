@@ -43,6 +43,11 @@ func NewClient(scheme string, host string, port int, config ClientConfig) *Clien
 	}
 }
 
+// Host returns the host that the client is connected to.
+func (c *Client) Host() string {
+	return c.host
+}
+
 // Close closes the client and releases any resources it holds.
 func (c *Client) Close() error {
 	if tsport, ok := c.innerClient.Transport.(*http.Transport); ok {

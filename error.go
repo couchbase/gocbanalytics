@@ -32,6 +32,10 @@ var ErrUnmarshal = errors.New("unmarshalling error")
 // ErrServiceUnavailable occurs when the Analytics service, or a part of the system in the path to it, is unavailable.
 var ErrServiceUnavailable = errors.New("service unavailable")
 
+// ErrQueryNotFound occurs when a query handle or its results are not found,
+// typically because they have been discarded or canceled.
+var ErrQueryNotFound = errors.New("query not found")
+
 type analyticsErrorDesc struct {
 	Code    uint32
 	Message string

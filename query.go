@@ -17,6 +17,20 @@ func (c *Cluster) ExecuteQuery(ctx context.Context, statement string, opts ...*Q
 	return c.client.QueryClient().Query(ctx, statement, queryOpts) //nolint:wrapcheck
 }
 
+// StartQuery starts execution of a deferred query statement on the server and returns a QueryHandle
+// that can be used to check status, retrieve results, cancel, or discard the query.
+// When StartQuery is called with no context.Context, or a context.Context with no Deadline, then
+// the Cluster level QueryTimeout will be applied.
+func (c *Cluster) StartQuery(ctx context.Context, statement string, opts ...*StartQueryOptions) (*QueryHandle, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	startOpts := mergeStartQueryOptions(opts...)
+
+	return c.client.QueryClient().StartQuery(ctx, statement, startOpts) //nolint:wrapcheck
+}
+
 // ExecuteQuery executes the query statement on the server, tying the query context to this Scope.
 // When ExecuteQuery is called with no context.Context, or a context.Context with no Deadline, then
 // the Cluster level QueryTimeout will be applied.
@@ -28,6 +42,20 @@ func (s *Scope) ExecuteQuery(ctx context.Context, statement string, opts ...*Que
 	queryOpts := mergeQueryOptions(opts...)
 
 	return s.client.QueryClient().Query(ctx, statement, queryOpts) //nolint:wrapcheck
+}
+
+// StartQuery starts execution of a deferred query statement on the server and returns a QueryHandle
+// that can be used to check status, retrieve results, cancel, or discard the query.
+// When StartQuery is called with no context.Context, or a context.Context with no Deadline, then
+// the Cluster level QueryTimeout will be applied.
+func (s *Scope) StartQuery(ctx context.Context, statement string, opts ...*StartQueryOptions) (*QueryHandle, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	startOpts := mergeStartQueryOptions(opts...)
+
+	return s.client.QueryClient().StartQuery(ctx, statement, startOpts) //nolint:wrapcheck
 }
 
 func mergeQueryOptions(opts ...*QueryOptions) *QueryOptions {

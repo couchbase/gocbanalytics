@@ -16,6 +16,14 @@ import (
 
 type queryClient interface {
 	Query(ctx context.Context, statement string, opts *QueryOptions) (*QueryResult, error)
+	StartQuery(ctx context.Context, statement string, opts *StartQueryOptions) (*QueryHandle, error)
+}
+
+type queryHandleProvider interface {
+	fetchHandleResult(ctx context.Context, handle string) (*QueryResultHandle, bool, error)
+	discardHandleResults(ctx context.Context, handle string) error
+	cancelHandle(ctx context.Context, requestID string) error
+	streamHandleResults(ctx context.Context, handle string, unmarshaler Unmarshaler) (*QueryResult, error)
 }
 
 type queryClientNamespace struct {
@@ -140,19 +148,6 @@ func (c *httpQueryClient) translateQueryOptions(ctx context.Context, statement s
 
 	execOpts["statement"] = statement
 
-	authHandler := func(req *http.Request) {
-		switch credential := c.credentials.get().(type) {
-		case *BasicAuthCredential:
-			req.SetBasicAuth(credential.UserPassPair.Username, credential.UserPassPair.Password)
-		case *DynamicBasicAuthCredential:
-			userPassPair := credential.Credentials()
-			req.SetBasicAuth(userPassPair.Username, userPassPair.Password)
-		case *JWTCredential:
-			req.Header.Set("Authorization", "Bearer "+credential.Token)
-		case *CertificateCredential:
-		}
-	}
-
 	maxRetries := c.defaultMaxRetries
 	if opts.MaxRetries != nil {
 		maxRetries = *opts.MaxRetries
@@ -160,7 +155,7 @@ func (c *httpQueryClient) translateQueryOptions(ctx context.Context, statement s
 
 	return &httpqueryclient.QueryOptions{
 		Payload:     execOpts,
-		AuthHandler: authHandler,
+		AuthHandler: c.handleAuthHandler(),
 		MaxRetries:  maxRetries,
 	}, nil
 }
@@ -335,4 +330,286 @@ func translateClientError(err error) error {
 	}
 
 	return qErr
+}
+
+func (c *httpQueryClient) handleAuthHandler() func(req *http.Request) {
+	return func(req *http.Request) {
+		switch credential := c.credentials.get().(type) {
+		case *BasicAuthCredential:
+			req.SetBasicAuth(credential.UserPassPair.Username, credential.UserPassPair.Password)
+		case *DynamicBasicAuthCredential:
+			userPassPair := credential.Credentials()
+			req.SetBasicAuth(userPassPair.Username, userPassPair.Password)
+		case *JWTCredential:
+			req.Header.Set("Authorization", "Bearer "+credential.Token)
+		case *CertificateCredential:
+		}
+	}
+}
+
+func (c *httpQueryClient) StartQuery(ctx context.Context, statement string, opts *StartQueryOptions) (*QueryHandle, error) {
+	clientOpts, err := c.translateStartQueryOptions(ctx, statement, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	if c.namespace != nil {
+		clientOpts.Payload["query_context"] = fmt.Sprintf("default:`%s`.`%s`", c.namespace.Database, c.namespace.Scope)
+	}
+
+	clientContextID := opts.ClientContextID
+	if clientContextID == nil {
+		id := uuid.NewString()
+		clientContextID = &id
+	}
+
+	clientOpts.Payload["client_context_id"] = clientContextID
+	clientOpts.Payload["mode"] = "async"
+
+	res, err := c.client.Query(ctx, clientOpts)
+	if err != nil {
+		return nil, translateClientError(err)
+	}
+
+	defer func() {
+		if closeErr := res.Close(); closeErr != nil {
+			c.logger.Debug("Failed to close start query response: %v", closeErr)
+		}
+	}()
+
+	metaBytes, err := res.MetaData()
+	if err != nil {
+		return nil, translateClientError(err)
+	}
+
+	var jsonResp jsonAnalyticsResponse
+	if err := json.Unmarshal(metaBytes, &jsonResp); err != nil {
+		return nil, fmt.Errorf("failed to parse async query response: %w", err) //nolint:err113
+	}
+
+	if jsonResp.Handle == "" {
+		return nil, newAnalyticsError(ErrAnalytics, statement, c.client.Host(), 0, 0).
+			withMessage("async query response did not contain a handle")
+	}
+
+	if jsonResp.RequestID == "" {
+		return nil, newAnalyticsError(ErrAnalytics, statement, c.client.Host(), 0, 0).
+			withMessage("async query response did not contain a request id")
+	}
+
+	return &QueryHandle{
+		handle:    jsonResp.Handle,
+		requestID: jsonResp.RequestID,
+		provider:  c,
+	}, nil
+}
+
+func (c *httpQueryClient) translateStartQueryOptions(ctx context.Context, statement string,
+	opts *StartQueryOptions) (*httpqueryclient.QueryOptions, error) {
+	execOpts := make(map[string]interface{})
+
+	if opts.PositionalParameters != nil {
+		execOpts["args"] = opts.PositionalParameters
+	}
+
+	if opts.NamedParameters != nil {
+		for key, value := range opts.NamedParameters {
+			if !strings.HasPrefix(key, "$") {
+				key = "$" + key
+			}
+
+			execOpts[key] = value
+		}
+	}
+
+	if opts.Raw != nil {
+		for k, v := range opts.Raw {
+			execOpts[k] = v
+		}
+	}
+
+	if opts.ScanConsistency != nil {
+		switch *opts.ScanConsistency {
+		case QueryScanConsistencyNotBounded:
+			execOpts["scan_consistency"] = "not_bounded"
+		case QueryScanConsistencyRequestPlus:
+			execOpts["scan_consistency"] = "request_plus"
+		default:
+			return nil, invalidArgumentError{
+				ArgumentName: "ScanConsistency",
+				Reason:       "unknown value",
+			}
+		}
+	}
+
+	if opts.ReadOnly != nil {
+		execOpts["readonly"] = *opts.ReadOnly
+	}
+
+	deadline, ok := ctx.Deadline()
+	if ok {
+		execOpts["timeout"] = (time.Until(deadline) + 5*time.Second).String()
+	} else {
+		execOpts["timeout"] = c.defaultServerQueryTimeout.String()
+	}
+
+	execOpts["statement"] = statement
+
+	maxRetries := c.defaultMaxRetries
+	if opts.MaxRetries != nil {
+		maxRetries = *opts.MaxRetries
+	}
+
+	return &httpqueryclient.QueryOptions{
+		Payload:     execOpts,
+		AuthHandler: c.handleAuthHandler(),
+		MaxRetries:  maxRetries,
+	}, nil
+}
+
+type jsonHandleStatusError struct {
+	Code    uint32 `json:"code"`
+	Message string `json:"msg"`
+	Retry   bool   `json:"retriable"`
+}
+
+type jsonHandleStatusResponse struct {
+	Status string                  `json:"status"`
+	Handle string                  `json:"handle,omitempty"`
+	Errors []jsonHandleStatusError `json:"errors,omitempty"`
+}
+
+func (c *httpQueryClient) translateHandleError(err error) error {
+	switch {
+	case errors.Is(err, httpqueryclient.ErrQueryNotFound):
+		var qerr *httpqueryclient.QueryError
+		if errors.As(err, &qerr) {
+			return newAnalyticsError(ErrQueryNotFound, qerr.Statement, qerr.Endpoint, qerr.HTTPResponseCode, qerr.Retries).
+				withMessage("query handle not found")
+		}
+
+		return newAnalyticsError(ErrQueryNotFound, "", c.client.Host(), 0, 0).
+			withMessage("query handle not found")
+	case errors.Is(err, httpqueryclient.ErrInvalidCredential):
+		var qerr *httpqueryclient.QueryError
+		if errors.As(err, &qerr) {
+			return newAnalyticsError(ErrInvalidCredential, qerr.Statement, qerr.Endpoint, qerr.HTTPResponseCode, qerr.Retries)
+		}
+
+		return newAnalyticsError(ErrInvalidCredential, "", c.client.Host(), 0, 0)
+	default:
+		return translateClientError(err)
+	}
+}
+
+func (c *httpQueryClient) fetchHandleResult(ctx context.Context, handle string) (*QueryResultHandle, bool, error) {
+	respBody, err := c.client.FetchHandleStatus(ctx, handle, c.handleAuthHandler(), c.defaultMaxRetries)
+	if err != nil {
+		return nil, false, c.translateHandleError(err)
+	}
+
+	var statusResp jsonHandleStatusResponse
+	if err := json.Unmarshal(respBody, &statusResp); err != nil {
+		return nil, false, newAnalyticsError(ErrAnalytics, "", c.client.Host(), 0, 0).
+			withMessage("failed to parse handle status response")
+	}
+
+	if len(statusResp.Errors) > 0 {
+		return nil, false, c.buildHandleStatusError(&statusResp)
+	}
+
+	if statusResp.Status == "success" {
+		return &QueryResultHandle{
+			handle:      statusResp.Handle,
+			provider:    c,
+			unmarshaler: c.defaultUnmarshaler,
+		}, true, nil
+	}
+
+	return nil, false, nil
+}
+
+func (c *httpQueryClient) buildHandleStatusError(statusResp *jsonHandleStatusResponse) error {
+	endpoint := c.client.Host()
+
+	if len(statusResp.Errors) == 0 {
+		return newAnalyticsError(ErrAnalytics, "", endpoint, 0, 0).
+			withMessage(fmt.Sprintf("query ended with status: %s", statusResp.Status))
+	}
+
+	descs := make([]analyticsErrorDesc, len(statusResp.Errors))
+
+	var firstNonRetriable *analyticsErrorDesc
+
+	for i, e := range statusResp.Errors {
+		descs[i] = analyticsErrorDesc{
+			Code:    e.Code,
+			Message: e.Message,
+		}
+
+		if firstNonRetriable == nil && !e.Retry {
+			firstNonRetriable = &descs[i]
+		}
+	}
+
+	var code int
+
+	var msg string
+
+	if firstNonRetriable == nil {
+		code = int(statusResp.Errors[0].Code)
+		msg = statusResp.Errors[0].Message
+	} else {
+		code = int(firstNonRetriable.Code)
+		msg = firstNonRetriable.Message
+	}
+
+	var cause error
+
+	switch code {
+	case 20000:
+		cause = ErrInvalidCredential
+	case 21002:
+		cause = ErrTimeout
+	case 23000:
+		cause = ErrServiceUnavailable
+	default:
+		cause = ErrQuery
+	}
+
+	return newQueryError(cause, "", endpoint, 0, code, msg, 0).
+		withErrors(descs)
+}
+
+func (c *httpQueryClient) discardHandleResults(ctx context.Context, handle string) error {
+	if err := c.client.DiscardHandleResults(ctx, handle, c.handleAuthHandler(), c.defaultMaxRetries); err != nil {
+		return c.translateHandleError(err)
+	}
+
+	return nil
+}
+
+func (c *httpQueryClient) cancelHandle(ctx context.Context, requestID string) error {
+	if err := c.client.CancelHandle(ctx, requestID, c.handleAuthHandler(), c.defaultMaxRetries); err != nil {
+		return c.translateHandleError(err)
+	}
+
+	return nil
+}
+
+func (c *httpQueryClient) streamHandleResults(ctx context.Context, handle string,
+	unmarshaler Unmarshaler) (*QueryResult, error) {
+	res, err := c.client.StreamHandleResults(ctx, handle, c.handleAuthHandler(), c.defaultMaxRetries)
+	if err != nil {
+		return nil, c.translateHandleError(err)
+	}
+
+	if unmarshaler == nil {
+		unmarshaler = c.defaultUnmarshaler
+	}
+
+	return &QueryResult{
+		reader:      c.newRowReader(res),
+		unmarshaler: unmarshaler,
+	}, nil
 }

@@ -1,21 +1,12 @@
 package httpqueryclient
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
-	"math"
-	"math/rand"
 	"net/http"
-	"net/http/httptrace"
 	"time"
-
-	"github.com/google/uuid"
-
-	"github.com/couchbase/gocbanalytics/internal/leakcheck"
 )
 
 // Query executes a query.
@@ -31,7 +22,8 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 		return nil, newObfuscateErrorWrapper("failed to marshal query payload", err)
 	}
 
-	ctxDeadline, _ := ctx.Deadline()
+	header := make(http.Header)
+	header.Set("Content-Type", "application/json")
 
 	var serverDeadline time.Time
 
@@ -45,249 +37,142 @@ func (c *Client) Query(ctx context.Context, opts *QueryOptions) (*QueryRowReader
 		serverDeadline = time.Now().Add(timeout)
 	}
 
-	var lastCode uint32
-
-	var lastMessage string
-
-	var lastRootErr error
-
-	var retries uint32
-
-	uniqueID := uuid.NewString()
-
-	backoff := analyticsExponentialBackoffWithJitter(100*time.Millisecond, 1*time.Minute, 2)
-
-	addrs, err := c.resolver.LookupHost(ctx, c.host)
-	if err != nil {
-		return nil, newAnalyticsError(fmt.Errorf("failed to lookup host: %w", err), statement, c.host, 0, retries)
+	reqOpts := &retryableRequestOptions{
+		method:         "POST",
+		path:           "/api/v1/request",
+		body:           body,
+		header:         header,
+		authHandler:    opts.AuthHandler,
+		maxRetries:     opts.MaxRetries,
+		statement:      statement,
+		payload:        opts.Payload,
+		serverDeadline: serverDeadline,
 	}
 
-	for {
-		// We use > here as this check is at the top of the loop, so we want to allow the nth retry to be made.
-		if retries > opts.MaxRetries {
-			// This could be a query error or a platform error, either way we don't wrap it in an analytics error.
-			return nil, lastRootErr
-		}
-
-		idx := rand.Intn(len(addrs))
-		addr := addrs[idx]
-
-		reqURI := fmt.Sprintf("%s://%s:%d/api/v1/request", c.scheme, addr, c.port)
-
-		var connectDoneErr error
-
-		trace := &httptrace.ClientTrace{ //nolint:exhaustruct
-			ConnectDone: func(_, _ string, err error) {
-				connectDoneErr = err
-			},
-		}
-
-		req, err := http.NewRequestWithContext(httptrace.WithClientTrace(ctx, trace), "POST", reqURI, io.NopCloser(bytes.NewReader(body)))
-		if err != nil {
-			return nil, newObfuscateErrorWrapper("failed to create http request", err)
-		}
-
-		req.Host = c.host
-		req.Header = make(http.Header)
-		req.Header.Set("Content-Type", "application/json")
-
-		if opts.AuthHandler != nil {
-			opts.AuthHandler(req)
-		}
-
-		c.logger.Trace("Sending request %s to %s", uniqueID, reqURI)
-
-		resp, err := c.innerClient.Do(req)
-		if err != nil {
-			c.logger.Trace("Received HTTP Response for ID=%s, errored: %v", uniqueID, err)
-
-			// We don't want to bail out on connection errors as they may be because of dial timeout.
-			if connectDoneErr == nil {
-				if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
-					return nil, newAnalyticsError(err, statement, c.host, 0, retries).withLastDetail(lastCode, lastMessage)
-				}
-			}
-
-			newBody, notRetriableErr := c.handleMaybeRetry(uniqueID, ctxDeadline, serverDeadline, backoff, retries, opts.Payload)
-			if notRetriableErr != nil {
-				return nil, newAnalyticsError(notRetriableErr, statement, c.host, 0, retries).withLastDetail(lastCode, lastMessage)
-			}
-
-			if connectDoneErr == nil {
-				lastRootErr = newObfuscateErrorWrapper("failed to send request", err)
-			} else {
-				lastRootErr = connectDoneErr
-			}
-
-			body = newBody
-			retries++
-
-			continue
-		}
-
-		c.logger.Trace("Received HTTP Response for ID=%s, status=%d", uniqueID, resp.StatusCode)
-
-		resp = leakcheck.WrapHTTPResponse(resp) // nolint: bodyclose
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			respBody, readErr := io.ReadAll(resp.Body)
-			if readErr != nil {
-				return nil, newAnalyticsError(newObfuscateErrorWrapper("failed to read response body", readErr), statement,
-					c.host, resp.StatusCode, retries).
-					withErrorText(string(respBody))
-			}
-
-			cErr := parseAnalyticsErrorResponse(respBody, statement, c.host, resp.StatusCode, lastCode, lastMessage, retries)
-			if cErr != nil {
-				first, retriable := isAnalyticsErrorRetriable(cErr)
-				if !retriable {
-					return nil, cErr
-				}
-
-				lastRootErr = cErr
-
-				if first != nil {
-					lastCode = first.Code
-					lastMessage = first.Message
-				}
-
-				newBody, err := c.handleMaybeRetry(uniqueID, ctxDeadline, serverDeadline, backoff, retries, opts.Payload)
-				if err != nil {
-					return nil, newAnalyticsError(err, statement, c.host, resp.StatusCode, retries).
-						withErrors(cErr.Errors).
-						withErrorText(string(respBody)).
-						withLastDetail(lastCode, lastMessage)
-				}
-
-				body = newBody
-				retries++
-
-				continue
-			}
-
-			return nil, newAnalyticsError(
-				errors.New("query returned non-200 status code but no errors in body"), //nolint:err113
-				statement,
-				c.host,
-				resp.StatusCode,
-				retries).
-				withErrorText(string(respBody)).
-				withLastDetail(lastCode, lastMessage)
-		}
-
-		streamer, err := newQueryStreamer(resp.Body, c.logger, "results")
-		if err != nil {
-			respBody, readErr := io.ReadAll(resp.Body)
-			if readErr != nil {
-				c.logger.Debug("Failed to read response body: %v", readErr)
-			}
-
-			return nil, newAnalyticsError(newObfuscateErrorWrapper("failed to parse success response body", readErr),
-				statement,
-				c.host,
-				resp.StatusCode,
-				retries).
-				withErrorText(string(respBody)).
-				withLastDetail(lastCode, lastMessage)
-		}
-
-		peeked := streamer.NextRow()
-		if peeked == nil {
-			err := streamer.Err()
-			if err != nil {
-				return nil, newAnalyticsError(err,
-					statement,
-					c.host,
-					resp.StatusCode,
-					retries).
-					withLastDetail(lastCode, lastMessage)
-			}
-
-			meta, metaErr := streamer.MetaData()
-			if metaErr != nil {
-				return nil, newAnalyticsError(metaErr,
-					statement,
-					c.host,
-					resp.StatusCode,
-					retries).
-					withErrorText(string(meta)).
-					withLastDetail(lastCode, lastMessage)
-			}
-
-			cErr := parseAnalyticsErrorResponse(meta, statement, c.host, resp.StatusCode, lastCode, lastMessage, retries)
-			if cErr != nil {
-				first, retriable := isAnalyticsErrorRetriable(cErr)
-				if !retriable {
-					return nil, cErr
-				}
-
-				lastRootErr = cErr
-
-				if first != nil {
-					lastCode = first.Code
-					lastMessage = first.Message
-				}
-
-				newBody, err := c.handleMaybeRetry(uniqueID, ctxDeadline, serverDeadline, backoff, retries, opts.Payload)
-				if err != nil {
-					return nil, newAnalyticsError(err, statement, c.host, resp.StatusCode, retries).
-						withErrors(cErr.Errors).
-						withErrorText(string(meta)).
-						withLastDetail(lastCode, lastMessage)
-				}
-
-				body = newBody
-				retries++
-
-				continue
-			}
-		}
-
-		return &QueryRowReader{
-			streamer:   streamer,
-			statement:  statement,
-			endpoint:   c.host,
-			statusCode: resp.StatusCode,
-			peeked:     peeked,
-		}, nil
-	}
+	return doWithRetries(ctx, c, reqOpts, func(resp *http.Response, state *retryState) (*QueryRowReader, retryAction, error) {
+		return c.handleQueryResponse(resp, state, statement)
+	})
 }
 
-// Note in the interest of keeping this signature sane, we return a raw base error here.
-func (c *Client) handleMaybeRetry(reqID string, ctxDeadline time.Time, serverDeadline time.Time, calc backoffCalculator,
-	retries uint32, payload map[string]interface{}) ([]byte, error) {
-	b := calc(retries)
+func (c *Client) handleQueryResponse(resp *http.Response, state *retryState, statement string) (*QueryRowReader, retryAction, error) {
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		respBody, readErr := io.ReadAll(resp.Body)
 
-	var body []byte
-
-	if !ctxDeadline.IsZero() {
-		now := time.Now()
-		if now.Add(b).After(ctxDeadline) {
-			return nil, ErrContextDeadlineWouldBeExceeded
+		closeErr := resp.Body.Close()
+		if closeErr != nil {
+			c.logger.Debug("Failed to close response body: %v", closeErr)
 		}
+
+		if readErr != nil {
+			return nil, retryActionReturn, newAnalyticsError(newObfuscateErrorWrapper("failed to read response body", readErr), statement,
+				c.host, resp.StatusCode, state.retries).
+				withErrorText(string(respBody))
+		}
+
+		cErr := parseAnalyticsErrorResponse(respBody, statement, c.host, resp.StatusCode, state.lastCode, state.lastMessage, state.retries)
+		if cErr != nil {
+			first, retriable := isAnalyticsErrorRetriable(cErr)
+			if !retriable {
+				return nil, retryActionReturn, cErr
+			}
+
+			state.lastRootErr = cErr
+
+			if first != nil {
+				state.lastCode = first.Code
+				state.lastMessage = first.Message
+			}
+
+			// Return the enriched error in case retry is denied.
+			return nil, retryActionRetry, newAnalyticsError(cErr.InnerError, statement, c.host, resp.StatusCode, state.retries).
+				withErrors(cErr.Errors).
+				withErrorText(string(respBody)).
+				withLastDetail(state.lastCode, state.lastMessage)
+		}
+
+		return nil, retryActionReturn, newAnalyticsError(
+			errors.New("query returned non-200 status code but no errors in body"), //nolint:err113
+			statement,
+			c.host,
+			resp.StatusCode,
+			state.retries).
+			withErrorText(string(respBody)).
+			withLastDetail(state.lastCode, state.lastMessage)
 	}
 
-	if !serverDeadline.IsZero() {
-		serverTimeout := serverDeadline.Sub(time.Now().Add(b))
-
-		if serverTimeout < 0 {
-			return nil, ErrTimeout
+	streamer, err := newQueryStreamer(resp.Body, c.logger, "results")
+	if err != nil {
+		respBody, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			c.logger.Debug("Failed to read response body: %v", readErr)
 		}
 
-		payload["timeout"] = serverTimeout.String()
+		closeErr := resp.Body.Close()
+		if closeErr != nil {
+			c.logger.Debug("Failed to close response body: %v", closeErr)
+		}
 
-		payloadBody, err := json.Marshal(payload)
+		return nil, retryActionReturn, newAnalyticsError(newObfuscateErrorWrapper("failed to parse success response body", err),
+			statement,
+			c.host,
+			resp.StatusCode,
+			state.retries).
+			withErrorText(string(respBody)).
+			withLastDetail(state.lastCode, state.lastMessage)
+	}
+
+	peeked := streamer.NextRow()
+	if peeked == nil {
+		err := streamer.Err()
 		if err != nil {
-			return nil, newObfuscateErrorWrapper("failed to marshal payload after updating timeout", err)
+			return nil, retryActionReturn, newAnalyticsError(err,
+				statement,
+				c.host,
+				resp.StatusCode,
+				state.retries).
+				withLastDetail(state.lastCode, state.lastMessage)
 		}
 
-		body = payloadBody
+		meta, metaErr := streamer.MetaData()
+		if metaErr != nil {
+			return nil, retryActionReturn, newAnalyticsError(metaErr,
+				statement,
+				c.host,
+				resp.StatusCode,
+				state.retries).
+				withErrorText(string(meta)).
+				withLastDetail(state.lastCode, state.lastMessage)
+		}
+
+		cErr := parseAnalyticsErrorResponse(meta, statement, c.host, resp.StatusCode, state.lastCode, state.lastMessage, state.retries)
+		if cErr != nil {
+			first, retriable := isAnalyticsErrorRetriable(cErr)
+			if !retriable {
+				return nil, retryActionReturn, cErr
+			}
+
+			state.lastRootErr = cErr
+
+			if first != nil {
+				state.lastCode = first.Code
+				state.lastMessage = first.Message
+			}
+
+			// Return the enriched error in case retry is denied.
+			return nil, retryActionRetry, newAnalyticsError(cErr.InnerError, statement, c.host, resp.StatusCode, state.retries).
+				withErrors(cErr.Errors).
+				withErrorText(string(meta)).
+				withLastDetail(state.lastCode, state.lastMessage)
+		}
 	}
 
-	c.logger.Trace("Retrying request %s in %s, retries: %d", reqID, b, retries)
-
-	time.Sleep(b)
-
-	return body, nil
+	return &QueryRowReader{
+		streamer:   streamer,
+		statement:  statement,
+		endpoint:   c.host,
+		statusCode: resp.StatusCode,
+		peeked:     peeked,
+	}, retryActionReturn, nil
 }
 
 func parseAnalyticsErrorResponse(respBody []byte, statement, endpoint string, statusCode int, lastCode uint32, lastMsg string, retries uint32) *QueryError {
@@ -389,42 +274,4 @@ func isAnalyticsErrorRetriable(cErr *QueryError) (*ErrorDesc, bool) {
 	}
 
 	return first, true
-}
-
-type backoffCalculator func(retryAttempts uint32) time.Duration
-
-func analyticsExponentialBackoffWithJitter(min, max time.Duration, backoffFactor float64) backoffCalculator { //nolint:revive
-	var minBackoff float64 = 1000000 // 1 Millisecond
-
-	var maxBackoff float64 = 500000000 // 500 Milliseconds
-
-	var factor float64 = 2
-
-	if min > 0 {
-		minBackoff = float64(min)
-	}
-
-	if max > 0 {
-		maxBackoff = float64(max)
-	}
-
-	if backoffFactor > 0 {
-		factor = backoffFactor
-	}
-
-	return func(retryAttempts uint32) time.Duration {
-		backoff := minBackoff * (math.Pow(factor, float64(retryAttempts)))
-
-		backoff = rand.Float64() * (backoff) // #nosec G404
-
-		if backoff > maxBackoff {
-			backoff = maxBackoff
-		}
-
-		if backoff < minBackoff {
-			backoff = minBackoff
-		}
-
-		return time.Duration(backoff)
-	}
 }
