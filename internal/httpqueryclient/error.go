@@ -155,6 +155,16 @@ func (e QueryError) Unwrap() error {
 	return e.InnerError
 }
 
+// isHTTP404Error returns true if the error is a QueryError with a 404 HTTP response code.
+func isHTTP404Error(err error) bool {
+	var qErr *QueryError
+	if errors.As(err, &qErr) && qErr.HTTPResponseCode == 404 {
+		return true
+	}
+
+	return false
+}
+
 type obfuscateErrorWrapper struct {
 	InnerError error
 	Message    string
