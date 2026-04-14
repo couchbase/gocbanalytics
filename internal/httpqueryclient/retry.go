@@ -166,9 +166,16 @@ func doWithRetries[T any](
 			newBody, retryErr := c.handleMaybeRetry(ctx, state.uniqueID, opts.serverDeadline,
 				state.backoff, state.retries, opts.payload)
 			if retryErr != nil {
-				// The handler error takes priority when the retry is denied.
+				// If the handler provided an enriched error, update its inner error to
+				// reflect the retry denial reason (e.g. timeout) so callers can
+				// unwrap the correct cause.
 				if handlerErr != nil {
-					return nil, handlerErr
+					var qErr *QueryError
+					if errors.As(handlerErr, &qErr) {
+						qErr.InnerError = retryErr
+
+						return nil, qErr
+					}
 				}
 
 				return nil, newAnalyticsError(retryErr, opts.statement, c.host, resp.StatusCode, state.retries).
