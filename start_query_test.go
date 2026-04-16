@@ -43,18 +43,19 @@ func TestStartQueryGoldenPath(t *testing.T) {
 		var resultHandle *cbanalytics.QueryResultHandle
 
 		require.Eventually(tt, func() bool {
-			rh, done, fetchErr := handle.FetchResultHandle(ctx)
+			status, fetchErr := handle.FetchStatus(ctx)
 			if fetchErr != nil {
-				tt.Logf("FetchResultHandle error: %v", fetchErr)
+				tt.Logf("FetchStatus error: %v", fetchErr)
 
 				return false
 			}
 
-			if done {
-				resultHandle = rh
+			if status.ResultsReady() {
+				resultHandle, err = status.ResultHandle()
+				require.NoError(tt, err)
 			}
 
-			return done
+			return status.ResultsReady()
 		}, 60*time.Second, 500*time.Millisecond, "query did not complete in time")
 
 		require.NotNil(tt, resultHandle)
@@ -114,18 +115,18 @@ func TestStartQueryDiscardResults(t *testing.T) {
 		var resultHandle *cbanalytics.QueryResultHandle
 
 		require.Eventually(tt, func() bool {
-			rh, done, fetchErr := handle.FetchResultHandle(ctx)
+			status, fetchErr := handle.FetchStatus(ctx)
 			if fetchErr != nil {
-				tt.Logf("FetchResultHandle error: %v", fetchErr)
+				tt.Logf("FetchStatus error: %v", fetchErr)
 
 				return false
 			}
 
-			if done {
-				resultHandle = rh
+			if status.ResultsReady() {
+				resultHandle, _ = status.ResultHandle()
 			}
 
-			return done
+			return status.ResultsReady()
 		}, 60*time.Second, 500*time.Millisecond, "query did not complete in time")
 
 		require.NotNil(tt, resultHandle)
@@ -156,18 +157,18 @@ func TestFetchResult_DefaultUnmarshaler(t *testing.T) {
 		var resultHandle *cbanalytics.QueryResultHandle
 
 		require.Eventually(tt, func() bool {
-			rh, done, fetchErr := handle.FetchResultHandle(ctx)
+			status, fetchErr := handle.FetchStatus(ctx)
 			if fetchErr != nil {
-				tt.Logf("FetchResultHandle error: %v", fetchErr)
+				tt.Logf("FetchStatus error: %v", fetchErr)
 
 				return false
 			}
 
-			if done {
-				resultHandle = rh
+			if status.ResultsReady() {
+				resultHandle, _ = status.ResultHandle()
 			}
 
-			return done
+			return status.ResultsReady()
 		}, 60*time.Second, 500*time.Millisecond, "query did not complete in time")
 
 		require.NotNil(tt, resultHandle)
@@ -209,18 +210,18 @@ func TestFetchResult_CustomUnmarshaler(t *testing.T) {
 		var resultHandle *cbanalytics.QueryResultHandle
 
 		require.Eventually(tt, func() bool {
-			rh, done, fetchErr := handle.FetchResultHandle(ctx)
+			status, fetchErr := handle.FetchStatus(ctx)
 			if fetchErr != nil {
-				tt.Logf("FetchResultHandle error: %v", fetchErr)
+				tt.Logf("FetchStatus error: %v", fetchErr)
 
 				return false
 			}
 
-			if done {
-				resultHandle = rh
+			if status.ResultsReady() {
+				resultHandle, _ = status.ResultHandle()
 			}
 
-			return done
+			return status.ResultsReady()
 		}, 60*time.Second, 500*time.Millisecond, "query did not complete in time")
 
 		require.NotNil(tt, resultHandle)

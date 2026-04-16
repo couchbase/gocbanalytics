@@ -2,6 +2,7 @@ package cbanalytics
 
 import (
 	"context"
+	"fmt"
 )
 
 // QueryHandle represents an asynchronous query handle that can be used to check status,
@@ -12,13 +13,40 @@ type QueryHandle struct {
 	provider  queryHandleProvider
 }
 
-// FetchResultHandle fetches the current status of the deferred query from the server.
-func (qh *QueryHandle) FetchResultHandle(ctx context.Context) (*QueryResultHandle, bool, error) {
+// FetchStatus fetches the current status of the deferred query from the server.
+func (qh *QueryHandle) FetchStatus(ctx context.Context) (*QueryStatus, error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
 
-	return qh.provider.fetchHandleResult(ctx, qh.handle)
+	return qh.provider.fetchHandleStatus(ctx, qh.handle)
+}
+
+// QueryStatus represents the status of a deferred query.
+type QueryStatus struct {
+	status       string
+	metrics      string
+	resultHandle *QueryResultHandle
+}
+
+// ResultsReady returns true if the query results are ready to be fetched.
+func (qs *QueryStatus) ResultsReady() bool {
+	return qs.resultHandle != nil
+}
+
+// ResultHandle returns the QueryResultHandle for accessing results.
+// ResultHandle should only be called when ResultsReady returns true.
+func (qs *QueryStatus) ResultHandle() (*QueryResultHandle, error) {
+	if qs.resultHandle == nil {
+		return nil, newAnalyticsError(ErrAnalytics, "", "", 0, 0).
+			withMessage("ResultHandle should only be called when ResultsReady returns true")
+	}
+
+	return qs.resultHandle, nil
+}
+
+func (qs *QueryStatus) String() string {
+	return fmt.Sprintf("status: %s, metrics: %s", qs.status, qs.metrics)
 }
 
 // Cancel cancels the deferred query on the server.
