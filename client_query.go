@@ -20,7 +20,7 @@ type queryClient interface {
 }
 
 type queryHandleProvider interface {
-	fetchHandleResult(ctx context.Context, handle string) (*QueryResultHandle, bool, error)
+	fetchHandleStatus(ctx context.Context, handle string) (*QueryStatus, error)
 	discardHandleResults(ctx context.Context, handle string) error
 	cancelHandle(ctx context.Context, requestID string) error
 	streamHandleResults(ctx context.Context, handle string, unmarshaler Unmarshaler) (*QueryResult, error)
@@ -474,9 +474,10 @@ type jsonHandleStatusError struct {
 }
 
 type jsonHandleStatusResponse struct {
-	Status string                  `json:"status"`
-	Handle string                  `json:"handle,omitempty"`
-	Errors []jsonHandleStatusError `json:"errors,omitempty"`
+	Status  string                  `json:"status"`
+	Handle  string                  `json:"handle,omitempty"`
+	Errors  []jsonHandleStatusError `json:"errors,omitempty"`
+	Metrics json.RawMessage         `json:"metrics,omitempty"`
 }
 
 func (c *httpQueryClient) translateHandleError(err error) error {
@@ -502,31 +503,41 @@ func (c *httpQueryClient) translateHandleError(err error) error {
 	}
 }
 
-func (c *httpQueryClient) fetchHandleResult(ctx context.Context, handle string) (*QueryResultHandle, bool, error) {
+func (c *httpQueryClient) fetchHandleStatus(ctx context.Context, handle string) (*QueryStatus, error) {
 	respBody, err := c.client.FetchHandleStatus(ctx, handle, c.handleAuthHandler(), c.defaultMaxRetries)
 	if err != nil {
-		return nil, false, c.translateHandleError(err)
+		return nil, c.translateHandleError(err)
 	}
 
 	var statusResp jsonHandleStatusResponse
 	if err := json.Unmarshal(respBody, &statusResp); err != nil {
-		return nil, false, newAnalyticsError(ErrAnalytics, "", c.client.Host(), 0, 0).
+		return nil, newAnalyticsError(ErrAnalytics, "", c.client.Host(), 0, 0).
 			withMessage("failed to parse handle status response")
 	}
 
 	if len(statusResp.Errors) > 0 {
-		return nil, false, c.buildHandleStatusError(&statusResp)
+		return nil, c.buildHandleStatusError(&statusResp)
 	}
+
+	metrics := string(statusResp.Metrics)
 
 	if statusResp.Status == "success" {
-		return &QueryResultHandle{
-			handle:      statusResp.Handle,
-			provider:    c,
-			unmarshaler: c.defaultUnmarshaler,
-		}, true, nil
+		return &QueryStatus{
+			status:  statusResp.Status,
+			metrics: metrics,
+			resultHandle: &QueryResultHandle{
+				handle:      statusResp.Handle,
+				provider:    c,
+				unmarshaler: c.defaultUnmarshaler,
+			},
+		}, nil
 	}
 
-	return nil, false, nil
+	return &QueryStatus{
+		resultHandle: nil,
+		status:       statusResp.Status,
+		metrics:      metrics,
+	}, nil
 }
 
 func (c *httpQueryClient) buildHandleStatusError(statusResp *jsonHandleStatusResponse) error {

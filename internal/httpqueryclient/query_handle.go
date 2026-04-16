@@ -138,7 +138,7 @@ func (c *Client) CancelHandle(ctx context.Context, requestID string,
 
 	_, err := c.doHandleRequest(ctx, handleRequestOptions{
 		method:      "DELETE",
-		path:        "/api/v1/active_requests/",
+		path:        "/api/v1/active_requests",
 		body:        []byte(form.Encode()),
 		contentType: "application/x-www-form-urlencoded",
 		authHandler: authHandler,

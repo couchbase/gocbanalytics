@@ -580,7 +580,7 @@ func TestHandleRequests_CorrectPaths(t *testing.T) {
 	t.Run("CancelHandle", func(t *testing.T) {
 		err := client.CancelHandle(ctx, "/api/v1/request/status/req-123", authHandler, 0)
 		require.NoError(t, err)
-		assert.Equal(t, "/api/v1/active_requests/", lastPath)
+		assert.Equal(t, "/api/v1/active_requests", lastPath)
 		assert.Equal(t, "DELETE", lastMethod)
 	})
 
