@@ -25,6 +25,7 @@ func TestNoScheme(t *testing.T) {
 func TestSetCredential_SameType(t *testing.T) {
 	cluster, err := cbanalytics.NewCluster("http://localhost", cbanalytics.NewBasicAuthCredential("user", "pass"), DefaultOptions())
 	require.NoError(t, err)
+
 	defer cluster.Close()
 
 	err = cluster.SetCredential(cbanalytics.NewBasicAuthCredential("newuser", "newpass"))
@@ -36,6 +37,7 @@ func TestSetCredential_SameType(t *testing.T) {
 func TestSetCredential_DifferentType(t *testing.T) {
 	cluster, err := cbanalytics.NewCluster("https://localhost", cbanalytics.NewBasicAuthCredential("user", "pass"), DefaultOptions())
 	require.NoError(t, err)
+
 	defer cluster.Close()
 
 	err = cluster.SetCredential(cbanalytics.NewJWTCredential("token"))
@@ -46,6 +48,7 @@ func TestSetCredential_DifferentType(t *testing.T) {
 func TestSetCredential_Nil(t *testing.T) {
 	cluster, err := cbanalytics.NewCluster("http://localhost", cbanalytics.NewBasicAuthCredential("user", "pass"), DefaultOptions())
 	require.NoError(t, err)
+
 	defer cluster.Close()
 
 	err = cluster.SetCredential(nil)

@@ -27,6 +27,7 @@ func StartQueryAgainst(t *testing.T, queryables []DeferredQueryable, fn func(tt 
 func TestStartQueryGoldenPath(t *testing.T) {
 	cluster, err := cbanalytics.NewCluster(TestOpts.OriginalConnStr, cbanalytics.NewBasicAuthCredential(TestOpts.Username, TestOpts.Password), DefaultOptions())
 	require.NoError(t, err)
+
 	defer func(cluster *cbanalytics.Cluster) {
 		err := cluster.Close()
 		assert.NoError(t, err)
@@ -78,6 +79,7 @@ func TestStartQueryGoldenPath(t *testing.T) {
 func TestStartQueryCancel(t *testing.T) {
 	cluster, err := cbanalytics.NewCluster(TestOpts.OriginalConnStr, cbanalytics.NewBasicAuthCredential(TestOpts.Username, TestOpts.Password), DefaultOptions())
 	require.NoError(t, err)
+
 	defer func(cluster *cbanalytics.Cluster) {
 		err := cluster.Close()
 		assert.NoError(t, err)
@@ -99,6 +101,7 @@ func TestStartQueryCancel(t *testing.T) {
 func TestStartQueryDiscardResults(t *testing.T) {
 	cluster, err := cbanalytics.NewCluster(TestOpts.OriginalConnStr, cbanalytics.NewBasicAuthCredential(TestOpts.Username, TestOpts.Password), DefaultOptions())
 	require.NoError(t, err)
+
 	defer func(cluster *cbanalytics.Cluster) {
 		err := cluster.Close()
 		assert.NoError(t, err)
@@ -141,6 +144,7 @@ func TestStartQueryDiscardResults(t *testing.T) {
 func TestFetchResult_DefaultUnmarshaler(t *testing.T) {
 	cluster, err := cbanalytics.NewCluster(TestOpts.OriginalConnStr, cbanalytics.NewBasicAuthCredential(TestOpts.Username, TestOpts.Password), DefaultOptions())
 	require.NoError(t, err)
+
 	defer func(cluster *cbanalytics.Cluster) {
 		err := cluster.Close()
 		assert.NoError(t, err)
@@ -194,6 +198,7 @@ func TestFetchResult_DefaultUnmarshaler(t *testing.T) {
 func TestFetchResult_CustomUnmarshaler(t *testing.T) {
 	cluster, err := cbanalytics.NewCluster(TestOpts.OriginalConnStr, cbanalytics.NewBasicAuthCredential(TestOpts.Username, TestOpts.Password), DefaultOptions())
 	require.NoError(t, err)
+
 	defer func(cluster *cbanalytics.Cluster) {
 		err := cluster.Close()
 		assert.NoError(t, err)
@@ -252,6 +257,7 @@ func TestStartQueryError(t *testing.T) {
 		DefaultOptions(),
 	)
 	require.NoError(t, err)
+
 	defer func(cluster *cbanalytics.Cluster) {
 		err := cluster.Close()
 		assert.NoError(t, err)
