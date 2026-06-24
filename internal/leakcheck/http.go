@@ -33,7 +33,7 @@ func WrapHTTPResponse(resp *http.Response) *http.Response {
 	}
 
 	trackedRespsLock.Lock()
-	trackedResps = append(trackedResps, trackingBody)
+	trackedResps = append(trackedResps, trackingBody) //nolint:wsl_v5
 	trackedRespsLock.Unlock()
 
 	resp.Body = trackingBody

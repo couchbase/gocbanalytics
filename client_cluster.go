@@ -63,6 +63,7 @@ func newHTTPClusterClient(opts clusterClientOptions) (*httpClusterClient, error)
 		}
 
 		var pool *x509.CertPool
+
 		switch to := trustOnly.(type) {
 		case TrustOnlyCapella:
 			pool = x509.NewCertPool()

@@ -8,7 +8,7 @@ linters:
     - nlreturn
     - revive
     - wrapcheck
-    - wsl
+    - wsl_v5
   settings:
     wrapcheck:
       ignore-package-globs:

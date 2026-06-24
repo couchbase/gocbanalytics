@@ -16,6 +16,7 @@ import (
 func TestBasicQuery(t *testing.T) {
 	cluster, err := cbanalytics.NewCluster(TestOpts.OriginalConnStr, cbanalytics.NewBasicAuthCredential(TestOpts.Username, TestOpts.Password), DefaultOptions())
 	require.NoError(t, err)
+
 	defer func(cluster *cbanalytics.Cluster) {
 		err := cluster.Close()
 		assert.NoError(t, err)
@@ -47,7 +48,9 @@ func TestBasicQuery(t *testing.T) {
 
 func TestBasicBufferedQuery(t *testing.T) {
 	cluster, err := cbanalytics.NewCluster(TestOpts.OriginalConnStr, cbanalytics.NewBasicAuthCredential(TestOpts.Username, TestOpts.Password), DefaultOptions())
+
 	require.NoError(t, err)
+
 	defer func(cluster *cbanalytics.Cluster) {
 		err := cluster.Close()
 		assert.NoError(t, err)
@@ -77,6 +80,7 @@ func TestOperationTimeout(t *testing.T) {
 		DefaultOptions(),
 	)
 	require.NoError(t, err)
+
 	defer func(cluster *cbanalytics.Cluster) {
 		err := cluster.Close()
 		assert.NoError(t, err)
@@ -101,6 +105,7 @@ func TestOperationTimeout(t *testing.T) {
 	t.Run("Context Cancel", func(tt *testing.T) {
 		ExecuteQueryAgainst(tt, []Queryable{cluster, cluster.Database(TestOpts.Database).Scope(TestOpts.Scope)}, func(ttt *testing.T, queryable Queryable) {
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+
 			go func() {
 				time.Sleep(1 * time.Second)
 				cancel()
@@ -123,6 +128,7 @@ func TestOperationTimeout(t *testing.T) {
 			DefaultOptions().SetTimeoutOptions(cbanalytics.NewTimeoutOptions().SetQueryTimeout(1*time.Second)),
 		)
 		require.NoError(tt, err)
+
 		defer func(cluster *cbanalytics.Cluster) {
 			err := cluster.Close()
 			assert.NoError(tt, err)
@@ -149,6 +155,7 @@ func TestQueryError(t *testing.T) {
 		DefaultOptions(),
 	)
 	require.NoError(t, err)
+
 	defer func(cluster *cbanalytics.Cluster) {
 		err := cluster.Close()
 		assert.NoError(t, err)
@@ -180,6 +187,7 @@ func TestInvalidCredential(t *testing.T) {
 		DefaultOptions(),
 	)
 	require.NoError(t, err)
+
 	defer func(cluster *cbanalytics.Cluster) {
 		err := cluster.Close()
 		assert.NoError(t, err)
@@ -208,6 +216,7 @@ func TestUnmarshaler(t *testing.T) {
 		DefaultOptions().SetUnmarshaler(unmarshaler),
 	)
 	require.NoError(t, err)
+
 	defer func(cluster *cbanalytics.Cluster) {
 		err := cluster.Close()
 		assert.NoError(t, err)
@@ -222,6 +231,7 @@ func TestUnmarshaler(t *testing.T) {
 
 		for row := res.NextRow(); row != nil; row = res.NextRow() {
 			var val interface{}
+
 			err = row.ContentAs(&val)
 			require.ErrorIs(tt, err, unmarshaler.Err)
 		}
@@ -234,6 +244,7 @@ func TestDNSLookupError(t *testing.T) {
 		DefaultOptions(),
 	)
 	require.NoError(t, err)
+
 	defer func(cluster *cbanalytics.Cluster) {
 		err := cluster.Close()
 		assert.NoError(t, err)
@@ -287,6 +298,7 @@ func CollectRows[T any](t *testing.T, res *cbanalytics.QueryResult) []T {
 
 	for row := res.NextRow(); row != nil; row = res.NextRow() {
 		var actualRow T
+
 		err := row.ContentAs(&actualRow)
 		require.NoError(t, err)
 

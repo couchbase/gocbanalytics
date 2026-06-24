@@ -94,6 +94,7 @@ func createHTTPClient(tlsConfig *tls.Config, connectTimeout time.Duration) (*htt
 
 			oldest := via[0]
 			auth := oldest.Header.Get("Authorization")
+
 			if auth != "" {
 				req.Header.Set("Authorization", auth)
 			}
