@@ -1,7 +1,7 @@
 package cbanalytics
 
 const (
-	versionStr = "v1.0.0"
+	versionStr = "v1.1.0"
 )
 
 // Version returns a string representation of the current SDK version.
