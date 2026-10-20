@@ -8,8 +8,10 @@ import (
 	"io"
 	"math"
 	"math/rand"
+	"net"
 	"net/http"
 	"net/http/httptrace"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -91,7 +93,7 @@ func doWithRetries[T any](
 		idx := rand.Intn(len(state.addrs)) //nolint:gosec
 		addr := state.addrs[idx]
 
-		reqURI := fmt.Sprintf("%s://%s:%d%s", c.scheme, addr, c.port, opts.path)
+		reqURI := fmt.Sprintf("%s://%s%s", c.scheme, net.JoinHostPort(addr, strconv.Itoa(c.port)), opts.path)
 
 		var connectDoneErr error
 
