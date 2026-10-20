@@ -4,7 +4,6 @@ package httpqueryclient
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"net"
 	"net/http"
 	"time"
@@ -84,22 +83,9 @@ func createHTTPClient(tlsConfig *tls.Config, connectTimeout time.Duration) (*htt
 
 	httpCli := &http.Client{ //nolint:exhaustruct
 		Transport: httpTransport,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			// All that we're doing here is setting auth on any redirects.
-			// For that reason we can just pull it off the oldest (first) request.
-			if len(via) >= 10 {
-				// Just duplicate the default behaviour for maximum redirects.
-				return errors.New("stopped after 10 redirects") //nolint:err113
-			}
-
-			oldest := via[0]
-			auth := oldest.Header.Get("Authorization")
-
-			if auth != "" {
-				req.Header.Set("Authorization", auth)
-			}
-
-			return nil
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			// We are not expected to follow any redirects
+			return http.ErrUseLastResponse
 		},
 	}
 
