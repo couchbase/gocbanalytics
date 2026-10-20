@@ -1,0 +1,13 @@
+linters:
+  enable:
+    - errorlint
+    - exhaustruct
+    - gocritic
+    - nilnil
+    - nlreturn
+    - wsl_v5
+  exclusions:
+    generated: lax
+    paths:
+      - protocol
+version: "2"
