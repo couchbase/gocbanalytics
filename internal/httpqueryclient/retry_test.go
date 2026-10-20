@@ -925,3 +925,42 @@ func TestRetries_HostHeaderSetCorrectly(t *testing.T) {
 			"unexpected host header: %s", h)
 	}
 }
+
+// --- Verify requests can be sent to IPv6 addresses ---
+
+func TestRetries_IPv6Address(t *testing.T) {
+	// Go 1.26 rejects unbracketed IPv6 hosts in URLs by default when the main module declares go >= 1.26.
+	// Force the strict behavior so that this test does not depend on the go version in go.mod.
+	t.Setenv("GODEBUG", "urlstrictcolons=1")
+
+	ln, err := net.Listen("tcp6", "[::1]:0")
+	if err != nil {
+		t.Skipf("IPv6 loopback not available: %v", err)
+	}
+
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(200)
+		mustWrite(t, w, analyticsResponse(withResults(1)))
+	}))
+	srv.Listener = ln
+	srv.Start()
+
+	defer srv.Close()
+
+	client := newTestClient(t, srv.Listener.Addr().String())
+	defer client.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	result, err := client.Query(ctx, &QueryOptions{
+		Payload:     map[string]interface{}{"statement": "SELECT 1"},
+		AuthHandler: func(_ *http.Request) {},
+		MaxRetries:  0,
+	})
+	require.NoError(t, err)
+
+	row := result.NextRow()
+	require.NotNil(t, row)
+	assert.Equal(t, "1", string(row))
+}
